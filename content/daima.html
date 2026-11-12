@@ -1,0 +1,82 @@
+<body>
+    <header>
+        <style>
+            header {
+                background-color: #898888f1;
+                padding: 20px;
+                text-align: center;
+            }
+        </style>
+        <h1>活动通知</h1>
+        <marquee>欢迎参加我们的活动！</marquee>
+    </header>
+    <section>
+       <input type="text" id="searchInput" placeholder="搜索活动名称..." onkeyup="filterTable()">
+        <script>//定义一个函数filterTable，用于过滤表格中的活动名称
+            function filterTable() {
+                var input, filter, table, tr, td, i, txtValue;//提前声明所有的变量
+                input = document.getElementById("searchInput");//找到页面上id为searchInput的元素并把它赋值给input
+                filter = input.value.toUpperCase();//把input的值转为大写赋值给filter，value是input的值，toUpperCase()是把字符串转为大写
+                table = document.querySelector("table");//找到页面上第一个table元素并把它赋值给table
+                tr =  table.getElementsByTagName("tr");//找到table下所有的tr元素并把它们赋值给tr，类似数组
+
+                for (i = 1; i < tr.length; i++) {//循环tr数组，从1开始是因为第0个tr是表头，不需要过滤
+                    td = tr[i].getElementsByTagName("td")[0];//找到当前tr下的第一个td元素并把它赋值给td
+                    if (td) {
+                        txtValue = td.textContent || td.innerText;//获取td的文本内容，如果textContent不存在就用innerText
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                            tr[i].style.display = "";//如果txtValue转为大写后包含filter，就显示该tr，否则隐藏
+                        } else {
+                            tr[i].style.display = "none";//如果不包含，就隐藏该tr
+                        }
+                    }       
+                }
+            }
+        </script>
+        <input type="submit" value="搜索" onclick="filterTable()">
+    </section>
+    <style>
+        table{
+            text-align:center;
+            width: 100%;
+
+        }
+    </style>
+    <table>
+        <tr>
+            <th>活动名称</th>
+            <th>日期</th>
+            <th>地点</th>
+        </tr>
+        <tr>
+            <td><a href="chunjieyundonghui.html">春季运动会</a></td>
+            <td>2027年5月1日</td>
+            <td>学校操场</td>
+        </tr>
+        <tr>
+            <td><a href="xiajiyinyuejie.html">夏季音乐节</a></td>
+            <td>2027年6月15日</td>
+            <td>学校操场</td>
+        </tr>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>
