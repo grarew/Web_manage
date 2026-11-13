@@ -1,82 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动通知</title>
+    <style>
+        header {
+            background-color: #898888f1;
+            padding: 20px;
+            text-align: center;
+        }
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            margin: 0;
+        }
+        section {
+            margin: 16px;
+        }
+        table {
+            text-align: center;
+            width: calc(100% - 32px);
+            margin: 16px;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+        .form-row {
+            margin: 8px 0;
+        }
+        .form-row input {
+            padding: 6px;
+            margin-right: 8px;
+            width: 180px;
+        }
+        #msg {
+            color: #d00;
+            min-height: 1em;
+            margin: 8px 0;
+        }
+        button {
+            padding: 6px 12px;
+            margin-right: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
 <body>
     <header>
-        <style>
-            header {
-                background-color: #898888f1;
-                padding: 20px;
-                text-align: center;
-            }
-        </style>
         <h1>活动通知</h1>
         <marquee>欢迎参加我们的活动！</marquee>
     </header>
-    <section>
-       <input type="text" id="searchInput" placeholder="搜索活动名称..." onkeyup="filterTable()">
-        <script>//定义一个函数filterTable，用于过滤表格中的活动名称
-            function filterTable() {
-                var input, filter, table, tr, td, i, txtValue;//提前声明所有的变量
-                input = document.getElementById("searchInput");//找到页面上id为searchInput的元素并把它赋值给input
-                filter = input.value.toUpperCase();//把input的值转为大写赋值给filter，value是input的值，toUpperCase()是把字符串转为大写
-                table = document.querySelector("table");//找到页面上第一个table元素并把它赋值给table
-                tr =  table.getElementsByTagName("tr");//找到table下所有的tr元素并把它们赋值给tr，类似数组
 
-                for (i = 1; i < tr.length; i++) {//循环tr数组，从1开始是因为第0个tr是表头，不需要过滤
-                    td = tr[i].getElementsByTagName("td")[0];//找到当前tr下的第一个td元素并把它赋值给td
-                    if (td) {
-                        txtValue = td.textContent || td.innerText;//获取td的文本内容，如果textContent不存在就用innerText
-                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                            tr[i].style.display = "";//如果txtValue转为大写后包含filter，就显示该tr，否则隐藏
-                        } else {
-                            tr[i].style.display = "none";//如果不包含，就隐藏该tr
-                        }
-                    }       
-                }
-            }
-        </script>
+    <section>
+        <input type="text" id="searchInput" placeholder="搜索活动名称..." onkeyup="filterTable()">
         <input type="submit" value="搜索" onclick="filterTable()">
     </section>
-    <style>
-        table{
-            text-align:center;
-            width: 100%;
 
-        }
-    </style>
-    <table>
-        <tr>
-            <th>活动名称</th>
-            <th>日期</th>
-            <th>地点</th>
-        </tr>
-        <tr>
-            <td><a href="content/chunjieyundonghui.html">春季运动会</a></td>
-            <td>2027年5月1日</td>
-            <td>学校操场</td>
-        </tr>
-        <tr>
-            <td><a href="content/xiajiyinyuejie.html">夏季音乐节</a></td>
-            <td>2027年6月15日</td>
-            <td>学校操场</td>
-        </tr>
+    <section>
+        <h2 id="formTitle">新增活动</h2>
+        <div class="form-row">
+            <input type="text" id="nameInput" placeholder="活动名称">
+            <input type="text" id="dateInput" placeholder="日期（如 2027年5月1日）">
+            <input type="text" id="locationInput" placeholder="地点">
+        </div>
+        <button id="submitBtn" onclick="submitForm()">新增</button>
+        <button id="cancelBtn" onclick="cancelEdit()" style="display:none">取消修改</button>
+        <p id="msg"></p>
+    </section>
+
+    <table id="activityTable">
+        <thead>
+            <tr>
+                <th>活动名称</th>
+                <th>日期</th>
+                <th>地点</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <tr><td colspan="4">加载中...</td></tr>
+        </tbody>
     </table>
 
+    <script>
+        // 后端地址：本地运行时用 http://localhost:3000；
+        // 部署到其他服务器后改成对应的地址即可。
+        const API_BASE = 'http://localhost:3000';
 
+        let activities = [];
+        let editingId = null;
 
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
 
+        function showMsg(text) {
+            document.getElementById('msg').textContent = text;
+        }
 
+        // 统一请求封装：校验返回的 { code, data, msg }
+        async function api(url, options) {
+            const res = await fetch(API_BASE + url, options);
+            let body;
+            try {
+                body = await res.json();
+            } catch (e) {
+                throw new Error('服务器返回的不是 JSON');
+            }
+            if (body.code !== 0) {
+                throw new Error(body.msg || '请求失败');
+            }
+            return body.data;
+        }
 
+        // GET 列表
+        async function loadActivities() {
+            try {
+                activities = await api('/api/activities');
+                renderTable();
+                showMsg('');
+            } catch (e) {
+                showMsg('加载失败：' + e.message);
+                document.getElementById('tableBody').innerHTML =
+                    '<tr><td colspan="4">加载失败，请确认后端已启动（node app.js）</td></tr>';
+            }
+        }
 
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            activities.forEach(function (a) {
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + escapeHtml(a.name) + '</td>' +
+                    '<td>' + escapeHtml(a.date) + '</td>' +
+                    '<td>' + escapeHtml(a.location) + '</td>' +
+                    '<td>' +
+                    '  <button onclick="startEdit(' + a.id + ')">编辑</button>' +
+                    '  <button onclick="deleteActivity(' + a.id + ')">删除</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            if (activities.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">暂无活动</td></tr>';
+            }
+        }
 
+        // 搜索过滤（只按活动名称过滤）
+        function filterTable() {
+            const filter = document.getElementById('searchInput').value.toUpperCase();
+            const trs = document.querySelectorAll('#tableBody tr');
+            for (let i = 0; i < trs.length; i++) {
+                const td = trs[i].getElementsByTagName('td')[0];
+                if (td) {
+                    const txt = (td.textContent || td.innerText).toUpperCase();
+                    trs[i].style.display = txt.indexOf(filter) > -1 ? '' : 'none';
+                }
+            }
+        }
 
+        function clearForm() {
+            document.getElementById('nameInput').value = '';
+            document.getElementById('dateInput').value = '';
+            document.getElementById('locationInput').value = '';
+        }
 
+        function cancelEdit() {
+            editingId = null;
+            clearForm();
+            document.getElementById('formTitle').textContent = '新增活动';
+            document.getElementById('submitBtn').textContent = '新增';
+            document.getElementById('cancelBtn').style.display = 'none';
+        }
 
+        // POST 新增 / PUT 修改
+        async function submitForm() {
+            const name = document.getElementById('nameInput').value.trim();
+            const date = document.getElementById('dateInput').value.trim();
+            const location = document.getElementById('locationInput').value.trim();
+            if (!name || !date || !location) {
+                showMsg('请填写完整：活动名称、日期、地点都不能为空');
+                return;
+            }
+            const payload = { name: name, date: date, location: location };
+            try {
+                if (editingId === null) {
+                    await api('/api/activities', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    showMsg('新增成功');
+                } else {
+                    await api('/api/activities/' + editingId, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    showMsg('修改成功');
+                    cancelEdit();
+                }
+                clearForm();
+                await loadActivities();
+            } catch (e) {
+                showMsg(e.message);
+            }
+        }
 
+        function startEdit(id) {
+            const a = activities.find(function (x) { return x.id === id; });
+            if (!a) return;
+            editingId = id;
+            document.getElementById('nameInput').value = a.name;
+            document.getElementById('dateInput').value = a.date;
+            document.getElementById('locationInput').value = a.location;
+            document.getElementById('formTitle').textContent = '编辑活动（ID ' + id + '）';
+            document.getElementById('submitBtn').textContent = '保存修改';
+            document.getElementById('cancelBtn').style.display = 'inline';
+        }
 
+        // DELETE 删除
+        async function deleteActivity(id) {
+            if (!confirm('确定删除这条活动吗？')) return;
+            try {
+                await api('/api/activities/' + id, { method: 'DELETE' });
+                showMsg('删除成功');
+                await loadActivities();
+            } catch (e) {
+                showMsg(e.message);
+            }
+        }
 
-
-
-
-
-
+        // 页面加载后自动拉取列表
+        loadActivities();
+    </script>
 </body>
 </html>
