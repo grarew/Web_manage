@@ -73,6 +73,10 @@ function validateActivity(body) {
   if (typeof body.location !== 'string' || body.location.trim() === '') {
     errors.push('location 必填且必须是字符串');
   }
+  // link 可选：用于页面跳转（活动详情页地址）
+  if (body.link !== undefined && (typeof body.link !== 'string' || body.link.trim() === '')) {
+    errors.push('link 可选，如果填写必须是字符串');
+  }
   return errors;
 }
 
@@ -105,7 +109,8 @@ app.post('/api/activities', (req, res) => {
     id: nextId,
     name: req.body.name.trim(),
     date: req.body.date.trim(),
-    location: req.body.location.trim()
+    location: req.body.location.trim(),
+    link: typeof req.body.link === 'string' ? req.body.link.trim() : ''
   };
   data.push(item);
   writeData(data);
@@ -132,7 +137,8 @@ app.put('/api/activities/:id', (req, res) => {
     id: parsed.id,
     name: req.body.name.trim(),
     date: req.body.date.trim(),
-    location: req.body.location.trim()
+    location: req.body.location.trim(),
+    link: typeof req.body.link === 'string' ? req.body.link.trim() : (data[idx].link || '')
   };
   writeData(data);
   ok(res, data[idx], '修改成功');

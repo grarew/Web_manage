@@ -3,12 +3,14 @@
     "id": 1,
     "name": "春季运动会",
     "date": "2027年5月1日",
-    "location": "学校操场"
+    "location": "学校操场",
+    "link": "content/chunjieyundonghui.html"
   },
   {
     "id": 2,
     "name": "夏季音乐节",
     "date": "2027年6月15日",
-    "location": "学校操场"
+    "location": "学校操场",
+    "link": "content/xiajiyinyuejie.html"
   }
 ]

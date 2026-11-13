@@ -64,6 +64,7 @@
             <input type="text" id="nameInput" placeholder="活动名称">
             <input type="text" id="dateInput" placeholder="日期（如 2027年5月1日）">
             <input type="text" id="locationInput" placeholder="地点">
+            <input type="text" id="linkInput" placeholder="详情页链接（可选，如 content/xxx.html）" style="width:300px">
         </div>
         <button id="submitBtn" onclick="submitForm()">新增</button>
         <button id="cancelBtn" onclick="cancelEdit()" style="display:none">取消修改</button>
@@ -135,8 +136,12 @@
             tbody.innerHTML = '';
             activities.forEach(function (a) {
                 const tr = document.createElement('tr');
+                // 有 link 就把活动名称做成可点击的跳转链接
+                const nameHtml = a.link
+                    ? '<a href="' + escapeHtml(a.link) + '">' + escapeHtml(a.name) + '</a>'
+                    : escapeHtml(a.name);
                 tr.innerHTML =
-                    '<td>' + escapeHtml(a.name) + '</td>' +
+                    '<td>' + nameHtml + '</td>' +
                     '<td>' + escapeHtml(a.date) + '</td>' +
                     '<td>' + escapeHtml(a.location) + '</td>' +
                     '<td>' +
@@ -167,6 +172,7 @@
             document.getElementById('nameInput').value = '';
             document.getElementById('dateInput').value = '';
             document.getElementById('locationInput').value = '';
+            document.getElementById('linkInput').value = '';
         }
 
         function cancelEdit() {
@@ -182,11 +188,13 @@
             const name = document.getElementById('nameInput').value.trim();
             const date = document.getElementById('dateInput').value.trim();
             const location = document.getElementById('locationInput').value.trim();
+            const link = document.getElementById('linkInput').value.trim();
             if (!name || !date || !location) {
                 showMsg('请填写完整：活动名称、日期、地点都不能为空');
                 return;
             }
             const payload = { name: name, date: date, location: location };
+            if (link) payload.link = link;
             try {
                 if (editingId === null) {
                     await api('/api/activities', {
@@ -218,6 +226,7 @@
             document.getElementById('nameInput').value = a.name;
             document.getElementById('dateInput').value = a.date;
             document.getElementById('locationInput').value = a.location;
+            document.getElementById('linkInput').value = a.link || '';
             document.getElementById('formTitle').textContent = '编辑活动（ID ' + id + '）';
             document.getElementById('submitBtn').textContent = '保存修改';
             document.getElementById('cancelBtn').style.display = 'inline';
