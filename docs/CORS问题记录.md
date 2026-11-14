@@ -130,3 +130,36 @@ config.js 里的 API_BASE 还是 http://localhost:3000
 
 线上页面访问的是用户自己的电脑，`localhost` 指向用户本机，根本没有你的后端。
 **改成线上后端地址**（如 `https://xxx.onrender.com`）即可。
+
+## 八、线上真实案例（本书档对应的实际部署）
+
+把前端推上 GitHub Pages、后端地址指向 `https://web-manage-api.onrender.com`（尚未部署）后，
+用无头浏览器打开线上页面，抓到的**真实报错原文**：
+
+```
+Access to fetch at 'https://web-manage-api.onrender.com/api/activities'
+from origin 'https://grarew.github.io'
+has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present
+on the requested resource.
+```
+
+```
+Failed to load resource: net::ERR_FAILED
+```
+
+页面表现（截图：[08-online-page.png](../screenshots/08-online-page.png)）：
+页面本身正常渲染，但列表区是「请求失败 + 重试」，浏览器 Network 面板显示请求被 CORS 拦下。
+
+**原因**：`web-manage-api.onrender.com` 这个域名还没有部署服务，访问它得到的是 Render 的 404 页面，
+自然没有 `Access-Control-Allow-Origin` 响应头。
+
+**解决**：把后端部署上去（见 [DEPLOY.md](../DEPLOY.md)），部署完成后：
+1. 该域名返回带 `Access-Control-Allow-Origin: *` 的接口响应；
+2. 若 Render 分配的域名不是 `web-manage-api.onrender.com`，同步修改 `config.js` 的 `PAGES_API_BASE`；
+3. 刷新线上页面，列表恢复正常。
+
+> 这也是「本地好好的、线上白屏」的另一种典型成因：
+> **地址写对了、但后端根本没部署，或者部署后 CORS 没开**。排查时先看 Network 面板的报错类型：
+> - `ERR_CONNECTION_REFUSED` / `ERR_NAME_NOT_RESOLVED` → 地址错了或服务没起；
+> - `blocked by CORS policy` → 服务在，但响应头缺；
+> - `404` → 路径或部署目标错了。
