@@ -83,6 +83,11 @@ curl -i -X POST http://localhost:3000/api/activities -H "Content-Type: applicati
 
 三态截图见 [screenshots/](screenshots/)；CORS 复现记录见 [docs/CORS问题记录.md](docs/CORS问题记录.md)；部署见 [DEPLOY.md](DEPLOY.md)。
 
+> **在线页面**：<https://grarew.github.io/Web_manage/>
+> 页面本身已上线，但 `config.js` 默认指向 `http://localhost:3000`，
+> 所以**只有你自己的电脑跑着 `node app.js` 时才能操作**；其他人打开会看到「请求失败」。
+> 要让所有人都能用，把后端部署到 Render 等平台，再把 `config.js` 的 `API_BASE` 换成线上地址。
+
 重新生成截图（需要 `npm i -D puppeteer-core`）：
 
 ```bash
