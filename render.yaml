@@ -5,7 +5,7 @@ services:
     name: web-manage-api
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev
     startCommand: node app.js
     healthCheckPath: /api/activities
     envVars:

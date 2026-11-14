@@ -79,14 +79,13 @@ curl -i -X POST http://localhost:3000/api/activities -H "Content-Type: applicati
 | 三种状态 | 加载中（转圈）/ 空数据（📭）/ 请求失败（⚠️ + 重试按钮） |
 | 自动刷新 | 新增、删除成功后自动重新拉取列表 |
 | 数据持久化 | 数据在 `data.json`，按 F5 或重启服务都不丢 |
-| 后端地址配置 | 抽在 [config.js](config.js) 的 `APP_CONFIG.API_BASE`，业务代码不写死 |
+| 后端地址配置 | 抽在 [config.js](config.js)：同源部署留空，GitHub Pages 用 `PAGES_API_BASE` |
 
 三态截图见 [screenshots/](screenshots/)；CORS 复现记录见 [docs/CORS问题记录.md](docs/CORS问题记录.md)；部署见 [DEPLOY.md](DEPLOY.md)。
 
-> **在线页面**：<https://grarew.github.io/Web_manage/>
-> 页面本身已上线，但 `config.js` 默认指向 `http://localhost:3000`，
-> 所以**只有你自己的电脑跑着 `node app.js` 时才能操作**；其他人打开会看到「请求失败」。
-> 要让所有人都能用，把后端部署到 Render 等平台，再把 `config.js` 的 `API_BASE` 换成线上地址。
+> **在线页面**：<https://grarew.github.io/Web_manage/>（GitHub Pages，会自动请求 `config.js` 里的 `PAGES_API_BASE`）
+> **单服务线上地址**：把后端部署到 Render 后，直接访问 Render 域名即可，页面和接口同源，不用改配置。
+> 一键部署入口：<https://render.com/deploy?repo=https://github.com/grarew/Web_manage>
 
 重新生成截图（需要 `npm i -D puppeteer-core`）：
 

@@ -13,11 +13,21 @@
 
 ## 方式 A：单服务部署到 Render（免费）
 
+### 一键部署入口
+
+登录 GitHub 的前提下，直接点这个链接（会把仓库和 `render.yaml` 自动带进去）：
+
+**<https://render.com/deploy?repo=https://github.com/grarew/Web_manage>**
+
+> 需要先注册/登录 Render（用 GitHub 账号登录最快），然后点 **Apply** 即可。
+
+### 或者手动操作
+
 1. 把代码推到 GitHub（已有仓库 `grarew/Web_manage`）。
 2. 打开 <https://render.com> → 注册并连接 GitHub。
 3. 点 **New +** → **Blueprint** → 选择本仓库（仓库里有 `render.yaml`，会自动识别）。
    或者用 **New +** → **Web Service**，手动填：
-   - **Build Command**：`npm install`
+   - **Build Command**：`npm install --omit=dev`
    - **Start Command**：`node app.js`
    - **Health Check Path**：`/api/activities`
 4. 部署完成后，Render 会给你一个地址，例如：

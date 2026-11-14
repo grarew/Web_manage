@@ -379,8 +379,8 @@
 
             // ---------- 加载列表（三态核心） ----------
             async function loadActivities() {
-                if (!API_BASE) {
-                    showError('未配置后端地址：请检查 config.js 中的 API_BASE');
+                if (!window.APP_CONFIG) {
+                    showError('未找到配置：请检查 config.js 是否被正确引入');
                     return;
                 }
 
@@ -508,7 +508,7 @@
             els.refresh.addEventListener('click', loadActivities);
 
             // ---------- 启动 ----------
-            els.apiInfo.textContent = '后端：' + (API_BASE || '未配置');
+            els.apiInfo.textContent = '后端：' + (API_BASE ? API_BASE : '同源（当前站点）');
             loadActivities();
         })();
     </script>
