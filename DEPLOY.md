@@ -128,6 +128,47 @@ pm2 startup
 
 ---
 
+## 方式 E：无账号、无绑卡 —— Cloudflare 临时隧道
+
+平台免费额度经常要求绑卡（Render / Railway 的部分账号会被要求验证支付方式）。
+如果只是想拿到一个**公网 HTTPS 地址**做演示，可以用 Cloudflare 的临时隧道，**零注册、零绑卡**。
+
+```powershell
+# 1. 安装（一次即可）
+winget install --id Cloudflare.cloudflared -e
+
+# 2. 确保本地服务已启动
+node app.js
+
+# 3. 开隧道（另开一个终端）
+cloudflared tunnel --url http://localhost:3000
+```
+
+终端会输出一个地址，例如：
+
+```
+https://huge-make-aug-accurate.trycloudflare.com
+```
+
+打开它就是完整的线上页面（页面 + 接口同源，无需改 `config.js`），增删改查都可用。
+
+**限制**：
+
+| 限制 | 说明 |
+|---|---|
+| 随进程存活 | 关掉 `cloudflared` 或电脑关机，地址立即失效 |
+| 地址会变 | 每次重新开隧道，域名都不一样 |
+| 性能一般 | 走 Cloudflare 中转，国内访问速度看线路 |
+| 不算正式部署平台 | 验收若严格限定 Render/Railway/阿里云/云服务器，这个只能当补充演示 |
+
+本地复验脚本：
+
+```bash
+node scripts/verify-url.js https://你的隧道地址
+```
+
+---
+
 ## 部署后自检清单
 
 - [ ] 打开线上地址，列表能加载出数据
