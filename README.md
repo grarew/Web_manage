@@ -81,7 +81,7 @@ curl -i -X POST http://localhost:3000/api/activities -H "Content-Type: applicati
 | 数据持久化 | 数据在 `data.json`，按 F5 或重启服务都不丢 |
 | 后端地址配置 | 抽在 [config.js](config.js)：同源部署留空，GitHub Pages 用 `PAGES_API_BASE` |
 
-三态截图见 [screenshots/](screenshots/)；CORS 复现记录见 [docs/CORS问题记录.md](docs/CORS问题记录.md)；部署见 [DEPLOY.md](DEPLOY.md)。
+三态截图见 [screenshots/](screenshots/)；CORS 复现记录见 [docs/CORS问题记录.md](docs/CORS问题记录.md)；部署踩坑记录见 [docs/部署问题记录.md](docs/部署问题记录.md)；部署步骤见 [DEPLOY.md](DEPLOY.md)。
 
 > **在线页面**：<https://grarew.github.io/Web_manage/>（GitHub Pages，会自动请求 `config.js` 里的 `PAGES_API_BASE`）
 > **单服务线上地址**：把后端部署到 Render 后，直接访问 Render 域名即可，页面和接口同源，不用改配置。
