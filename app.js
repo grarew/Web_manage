@@ -28,8 +28,18 @@ const SEED = [
   { id: 2, name: '夏季音乐节', date: '2027年6月15日', location: '学校操场' }
 ];
 
-// ---------- 跨域：两行代码允许网页（如 GitHub Pages）访问 ----------
-app.use(cors());
+// ---------- 跨域：在服务端加响应头，允许网页（如 GitHub Pages）跨域访问 ----------
+// cors 中间件实际会加上这些响应头：
+//   Access-Control-Allow-Origin: *
+//   Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS
+//   Access-Control-Allow-Headers: Content-Type
+// 并自动处理浏览器的 OPTIONS 预检请求（否则 DELETE、JSON 请求会被浏览器拦下）。
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  maxAge: 86400
+}));
 
 // 解析 JSON 请求体
 app.use(express.json());
@@ -159,6 +169,17 @@ app.delete('/api/activities/:id', (req, res) => {
   writeData(data);
   ok(res, removed, '删除成功');
 });
+
+// ---------- 静态托管前端（单服务部署时可直接打开页面） ----------
+// 只放行前端需要的文件，避免把数据文件和源码暴露出去。
+const SENSITIVE = /^\/(app\.js|data\.json|package\.json|package-lock\.json)$/i;
+app.use((req, res, next) => {
+  if (SENSITIVE.test(req.path) || req.path.indexOf('/node_modules/') === 0 || req.path.indexOf('/.git/') === 0) {
+    return fail(res, 404, '接口不存在');
+  }
+  next();
+});
+app.use(express.static(__dirname, { index: 'index.html' }));
 
 // ---------- 404：未匹配到的接口也返回统一 JSON ----------
 app.use((req, res) => {

@@ -6,8 +6,26 @@
   "scripts": {
     "start": "node app.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "express": "^4.22.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grarew/Web_manage.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/grarew/Web_manage/issues"
+  },
+  "homepage": "https://github.com/grarew/Web_manage#readme",
+  "devDependencies": {
+    "puppeteer-core": "^25.17.0"
   }
 }

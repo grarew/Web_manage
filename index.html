@@ -3,249 +3,514 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>活动通知</title>
+    <title>活动通知管理</title>
     <style>
-        header {
-            background-color: #898888f1;
-            padding: 20px;
-            text-align: center;
-        }
+        * { box-sizing: border-box; }
         body {
-            font-family: "Microsoft YaHei", sans-serif;
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
             margin: 0;
+            background: #f5f6f8;
+            color: #333;
         }
-        section {
-            margin: 16px;
-        }
-        table {
+        header {
+            background: #898888f1;
+            padding: 24px 16px;
             text-align: center;
-            width: calc(100% - 32px);
-            margin: 16px;
-            border-collapse: collapse;
+            color: #fff;
         }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
+        header h1 { margin: 0 0 8px; font-size: 26px; }
+        header marquee { font-size: 14px; opacity: .9; }
+
+        main {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 16px;
         }
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+        .card h2 {
+            margin: 0 0 14px;
+            font-size: 17px;
+            color: #444;
+        }
+
         .form-row {
-            margin: 8px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
         }
         .form-row input {
-            padding: 6px;
-            margin-right: 8px;
-            width: 180px;
+            padding: 8px 10px;
+            border: 1px solid #d5d8dd;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 200px;
+            outline: none;
         }
-        #msg {
-            color: #d00;
-            min-height: 1em;
-            margin: 8px 0;
-        }
+        #dateInput { width: 250px; }
+        #locationInput { width: 150px; }
+        #linkInput { width: 260px; }
+        .form-row input:focus { border-color: #4a90d9; }
+
         button {
-            padding: 6px 12px;
-            margin-right: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #4a90d9;
+            color: #fff;
+            font-size: 14px;
             cursor: pointer;
+            transition: background .15s;
         }
+        button:hover { background: #3a7bc0; }
+        button.secondary { background: #8e949c; }
+        button.secondary:hover { background: #767c85; }
+        button.danger { background: #e05555; }
+        button.danger:hover { background: #c94343; }
+        button.small { padding: 5px 10px; font-size: 13px; }
+
+        #msg {
+            min-height: 20px;
+            margin: 10px 0 0;
+            font-size: 14px;
+        }
+        #msg.ok { color: #2e8b57; }
+        #msg.err { color: #d33; }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .toolbar input {
+            padding: 8px 10px;
+            border: 1px solid #d5d8dd;
+            border-radius: 6px;
+            width: 240px;
+            outline: none;
+        }
+        .toolbar .spacer { flex: 1; }
+        .api-info {
+            font-size: 12px;
+            color: #999;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+        }
+        th, td {
+            border: 1px solid #e4e6ea;
+            padding: 10px 8px;
+            font-size: 14px;
+        }
+        th { background: #f0f2f5; font-weight: 600; }
+        tbody tr:hover { background: #fafbfc; }
+        td a { color: #2f6fb0; text-decoration: none; }
+        td a:hover { text-decoration: underline; }
+
+        /* ---------- 三态：加载中 / 空数据 / 请求失败 ---------- */
+        .state-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 56px 20px;
+            color: #666;
+            text-align: center;
+        }
+        .state-panel p { margin: 0; font-size: 15px; }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e3e6ea;
+            border-top-color: #4a90d9;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .state-icon { font-size: 40px; line-height: 1; }
+        .state-title { font-size: 16px; font-weight: 600; color: #555; }
+        .state-detail {
+            font-size: 13px;
+            color: #999;
+            max-width: 560px;
+            word-break: break-all;
+            line-height: 1.6;
+        }
+        .retry-btn { margin-top: 4px; }
+
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
     <header>
-        <h1>活动通知</h1>
+        <h1>活动通知管理</h1>
         <marquee>欢迎参加我们的活动！</marquee>
     </header>
 
-    <section>
-        <input type="text" id="searchInput" placeholder="搜索活动名称..." onkeyup="filterTable()">
-        <input type="submit" value="搜索" onclick="filterTable()">
-    </section>
+    <main>
+        <!-- ========== 新增 / 编辑表单 ========== -->
+        <section class="card">
+            <h2 id="formTitle">新增活动</h2>
+            <form id="activityForm">
+                <div class="form-row">
+                    <input type="text" id="nameInput" placeholder="活动名称（必填）">
+                    <input type="text" id="dateInput" placeholder="日期，如 2027年5月1日（必填）">
+                    <input type="text" id="locationInput" placeholder="地点（必填）">
+                    <input type="text" id="linkInput" class="link-input" placeholder="详情页链接（可选）">
+                    <button type="submit" id="submitBtn">新增</button>
+                    <button type="button" id="cancelBtn" class="secondary" hidden>取消修改</button>
+                </div>
+            </form>
+            <p id="msg"></p>
+        </section>
 
-    <section>
-        <h2 id="formTitle">新增活动</h2>
-        <div class="form-row">
-            <input type="text" id="nameInput" placeholder="活动名称">
-            <input type="text" id="dateInput" placeholder="日期（如 2027年5月1日）">
-            <input type="text" id="locationInput" placeholder="地点">
-            <input type="text" id="linkInput" placeholder="详情页链接（可选，如 content/xxx.html）" style="width:300px">
-        </div>
-        <button id="submitBtn" onclick="submitForm()">新增</button>
-        <button id="cancelBtn" onclick="cancelEdit()" style="display:none">取消修改</button>
-        <p id="msg"></p>
-    </section>
+        <!-- ========== 列表区：三态都在这里切换 ========== -->
+        <section class="card">
+            <div class="toolbar">
+                <input type="text" id="searchInput" placeholder="搜索活动名称..." onkeyup="filterTable()">
+                <button type="button" id="refreshBtn" class="secondary">刷新列表</button>
+                <span class="spacer"></span>
+                <span class="api-info" id="apiInfo"></span>
+            </div>
 
-    <table id="activityTable">
-        <thead>
-            <tr>
-                <th>活动名称</th>
-                <th>日期</th>
-                <th>地点</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody id="tableBody">
-            <tr><td colspan="4">加载中...</td></tr>
-        </tbody>
-    </table>
+            <!-- 加载中 / 空数据 / 请求失败 共用这个面板 -->
+            <div id="listState" class="state-panel"></div>
 
+            <table id="activityTable" hidden>
+                <thead>
+                    <tr>
+                        <th>活动名称</th>
+                        <th>日期</th>
+                        <th>地点</th>
+                        <th style="width:150px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </section>
+    </main>
+
+    <!-- 配置项单独一个文件，业务代码不写死后端地址 -->
+    <script src="config.js"></script>
     <script>
-        // 后端地址：本地运行时用 http://localhost:3000；
-        // 部署到其他服务器后改成对应的地址即可。
-        const API_BASE = 'http://localhost:3000';
+        (function () {
+            'use strict';
 
-        let activities = [];
-        let editingId = null;
+            // ---------- 读取配置 ----------
+            var cfg = window.APP_CONFIG || {};
+            var API_BASE = String(cfg.API_BASE || '').replace(/\/+$/, '');
 
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, function (c) {
-                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-            });
-        }
+            // ---------- 页面元素 ----------
+            var els = {
+                form: document.getElementById('activityForm'),
+                formTitle: document.getElementById('formTitle'),
+                name: document.getElementById('nameInput'),
+                date: document.getElementById('dateInput'),
+                location: document.getElementById('locationInput'),
+                link: document.getElementById('linkInput'),
+                submit: document.getElementById('submitBtn'),
+                cancel: document.getElementById('cancelBtn'),
+                msg: document.getElementById('msg'),
+                search: document.getElementById('searchInput'),
+                refresh: document.getElementById('refreshBtn'),
+                listState: document.getElementById('listState'),
+                table: document.getElementById('activityTable'),
+                tbody: document.getElementById('tableBody'),
+                apiInfo: document.getElementById('apiInfo')
+            };
 
-        function showMsg(text) {
-            document.getElementById('msg').textContent = text;
-        }
+            var activities = [];
+            var editingId = null;
 
-        // 统一请求封装：校验返回的 { code, data, msg }
-        async function api(url, options) {
-            const res = await fetch(API_BASE + url, options);
-            let body;
-            try {
-                body = await res.json();
-            } catch (e) {
-                throw new Error('服务器返回的不是 JSON');
+            // ---------- 工具函数 ----------
+            function escapeHtml(s) {
+                return String(s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
             }
-            if (body.code !== 0) {
-                throw new Error(body.msg || '请求失败');
-            }
-            return body.data;
-        }
 
-        // GET 列表
-        async function loadActivities() {
-            try {
-                activities = await api('/api/activities');
-                renderTable();
-                showMsg('');
-            } catch (e) {
-                showMsg('加载失败：' + e.message);
-                document.getElementById('tableBody').innerHTML =
-                    '<tr><td colspan="4">加载失败，请确认后端已启动（node app.js）</td></tr>';
+            function showMsg(text, type) {
+                els.msg.textContent = text || '';
+                els.msg.className = type === 'ok' ? 'ok' : (type === 'err' ? 'err' : '');
             }
-        }
 
-        function renderTable() {
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = '';
-            activities.forEach(function (a) {
-                const tr = document.createElement('tr');
-                // 有 link 就把活动名称做成可点击的跳转链接
-                const nameHtml = a.link
-                    ? '<a href="' + escapeHtml(a.link) + '">' + escapeHtml(a.name) + '</a>'
-                    : escapeHtml(a.name);
-                tr.innerHTML =
-                    '<td>' + nameHtml + '</td>' +
-                    '<td>' + escapeHtml(a.date) + '</td>' +
-                    '<td>' + escapeHtml(a.location) + '</td>' +
-                    '<td>' +
-                    '  <button onclick="startEdit(' + a.id + ')">编辑</button>' +
-                    '  <button onclick="deleteActivity(' + a.id + ')">删除</button>' +
-                    '</td>';
-                tbody.appendChild(tr);
-            });
-            if (activities.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">暂无活动</td></tr>';
+            function sleep(ms) {
+                return new Promise(function (resolve) { setTimeout(resolve, ms); });
             }
-        }
 
-        // 搜索过滤（只按活动名称过滤）
-        function filterTable() {
-            const filter = document.getElementById('searchInput').value.toUpperCase();
-            const trs = document.querySelectorAll('#tableBody tr');
-            for (let i = 0; i < trs.length; i++) {
-                const td = trs[i].getElementsByTagName('td')[0];
-                if (td) {
-                    const txt = (td.textContent || td.innerText).toUpperCase();
+            // ---------- 统一请求：校验 { code, data, msg } ----------
+            async function request(path, options) {
+                var res = await fetch(API_BASE + path, options);
+                var body;
+                try {
+                    body = await res.json();
+                } catch (e) {
+                    throw new Error('服务器返回的不是 JSON（HTTP ' + res.status + '）');
+                }
+                if (body.code !== 0) {
+                    throw new Error(body.msg || ('请求失败（HTTP ' + res.status + '）'));
+                }
+                return body.data;
+            }
+
+            // ---------- 三态渲染 ----------
+            function showLoading() {
+                els.table.hidden = true;
+                els.listState.hidden = false;
+                els.listState.innerHTML =
+                    '<div class="spinner"></div>' +
+                    '<p>正在加载活动列表…</p>';
+            }
+
+            function showEmpty() {
+                els.table.hidden = true;
+                els.listState.hidden = false;
+                els.listState.innerHTML =
+                    '<div class="state-icon">📭</div>' +
+                    '<p class="state-title">暂无活动数据</p>' +
+                    '<p class="state-detail">列表为空。可以在上方表单新增一条活动。</p>';
+            }
+
+            function showError(message, rawDetail) {
+                els.table.hidden = true;
+                els.listState.hidden = false;
+                els.listState.innerHTML = '';
+
+                var box = document.createElement('div');
+                box.className = 'state-panel';
+                box.style.padding = '0';
+
+                var icon = document.createElement('div');
+                icon.className = 'state-icon';
+                icon.textContent = '⚠️';
+
+                var title = document.createElement('p');
+                title.className = 'state-title';
+                title.textContent = '请求失败';
+
+                var detail = document.createElement('p');
+                detail.className = 'state-detail';
+                detail.textContent = message || '未知错误';
+
+                box.appendChild(icon);
+                box.appendChild(title);
+                box.appendChild(detail);
+
+                if (rawDetail) {
+                    var raw = document.createElement('p');
+                    raw.className = 'state-detail';
+                    raw.style.fontSize = '12px';
+                    raw.style.color = '#bbb';
+                    raw.textContent = '原始错误：' + rawDetail;
+                    box.appendChild(raw);
+                }
+
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'retry-btn';
+                btn.textContent = '重试';
+                btn.onclick = loadActivities;
+
+                box.appendChild(btn);
+                els.listState.appendChild(box);
+            }
+
+            // 把浏览器的英文网络错误翻译成能看懂的中文提示
+            function friendlyError(e) {
+                var msg = (e && e.message) ? e.message : String(e);
+                if (e instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+                    return '无法连接后端服务。请确认已运行 node app.js，并检查 config.js 里的 API_BASE 地址是否正确（也可能是 CORS 被拦截）。';
+                }
+                return msg;
+            }
+
+            function showReady() {
+                els.listState.hidden = true;
+                els.table.hidden = false;
+            }
+
+            // ---------- 渲染表格 ----------
+            function renderTable() {
+                els.tbody.innerHTML = '';
+                activities.forEach(function (a) {
+                    var tr = document.createElement('tr');
+
+                    var nameHtml = a.link
+                        ? '<a href="' + escapeHtml(a.link) + '">' + escapeHtml(a.name) + '</a>'
+                        : escapeHtml(a.name);
+
+                    tr.innerHTML =
+                        '<td>' + nameHtml + '</td>' +
+                        '<td>' + escapeHtml(a.date) + '</td>' +
+                        '<td>' + escapeHtml(a.location) + '</td>' +
+                        '<td>' +
+                        '<button class="small" onclick="startEdit(' + a.id + ')">编辑</button> ' +
+                        '<button class="small danger" onclick="deleteActivity(' + a.id + ')">删除</button>' +
+                        '</td>';
+
+                    els.tbody.appendChild(tr);
+                });
+            }
+
+            function filterTable() {
+                var filter = els.search.value.toUpperCase();
+                var trs = els.tbody.querySelectorAll('tr');
+                for (var i = 0; i < trs.length; i++) {
+                    var td = trs[i].getElementsByTagName('td')[0];
+                    if (!td) continue;
+                    var txt = (td.textContent || td.innerText || '').toUpperCase();
                     trs[i].style.display = txt.indexOf(filter) > -1 ? '' : 'none';
                 }
             }
-        }
 
-        function clearForm() {
-            document.getElementById('nameInput').value = '';
-            document.getElementById('dateInput').value = '';
-            document.getElementById('locationInput').value = '';
-            document.getElementById('linkInput').value = '';
-        }
-
-        function cancelEdit() {
-            editingId = null;
-            clearForm();
-            document.getElementById('formTitle').textContent = '新增活动';
-            document.getElementById('submitBtn').textContent = '新增';
-            document.getElementById('cancelBtn').style.display = 'none';
-        }
-
-        // POST 新增 / PUT 修改
-        async function submitForm() {
-            const name = document.getElementById('nameInput').value.trim();
-            const date = document.getElementById('dateInput').value.trim();
-            const location = document.getElementById('locationInput').value.trim();
-            const link = document.getElementById('linkInput').value.trim();
-            if (!name || !date || !location) {
-                showMsg('请填写完整：活动名称、日期、地点都不能为空');
-                return;
-            }
-            const payload = { name: name, date: date, location: location };
-            if (link) payload.link = link;
-            try {
-                if (editingId === null) {
-                    await api('/api/activities', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    showMsg('新增成功');
-                } else {
-                    await api('/api/activities/' + editingId, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    showMsg('修改成功');
-                    cancelEdit();
+            // ---------- 加载列表（三态核心） ----------
+            async function loadActivities() {
+                if (!API_BASE) {
+                    showError('未配置后端地址：请检查 config.js 中的 API_BASE');
+                    return;
                 }
+
+                showLoading();
+                var startedAt = Date.now();
+
+                try {
+                    var data = await request('/api/activities');
+                    if (!Array.isArray(data)) {
+                        throw new Error('返回数据格式异常：期望数组');
+                    }
+                    activities = data;
+
+                    // 保证"加载中"状态至少可见 500ms，避免一闪而过
+                    var elapsed = Date.now() - startedAt;
+                    if (elapsed < 500) await sleep(500 - elapsed);
+
+                    renderTable();
+                    if (activities.length === 0) {
+                        showEmpty();
+                    } else {
+                        showReady();
+                    }
+                    showMsg('');
+                } catch (e) {
+                    var elapsed2 = Date.now() - startedAt;
+                    if (elapsed2 < 500) await sleep(500 - elapsed2);
+                    showError(friendlyError(e), e.message);
+                }
+            }
+
+            // ---------- 表单：新增 / 编辑 ----------
+            function clearForm() {
+                els.name.value = '';
+                els.date.value = '';
+                els.location.value = '';
+                els.link.value = '';
+            }
+
+            function enterEditMode(id) {
+                var a = activities.find(function (x) { return x.id === id; });
+                if (!a) return;
+                editingId = id;
+                els.name.value = a.name;
+                els.date.value = a.date;
+                els.location.value = a.location;
+                els.link.value = a.link || '';
+                els.formTitle.textContent = '编辑活动（ID ' + id + '）';
+                els.submit.textContent = '保存修改';
+                els.cancel.hidden = false;
+            }
+
+            function exitEditMode() {
+                editingId = null;
                 clearForm();
-                await loadActivities();
-            } catch (e) {
-                showMsg(e.message);
+                els.formTitle.textContent = '新增活动';
+                els.submit.textContent = '新增';
+                els.cancel.hidden = true;
             }
-        }
 
-        function startEdit(id) {
-            const a = activities.find(function (x) { return x.id === id; });
-            if (!a) return;
-            editingId = id;
-            document.getElementById('nameInput').value = a.name;
-            document.getElementById('dateInput').value = a.date;
-            document.getElementById('locationInput').value = a.location;
-            document.getElementById('linkInput').value = a.link || '';
-            document.getElementById('formTitle').textContent = '编辑活动（ID ' + id + '）';
-            document.getElementById('submitBtn').textContent = '保存修改';
-            document.getElementById('cancelBtn').style.display = 'inline';
-        }
+            async function handleSubmit(ev) {
+                ev.preventDefault();
 
-        // DELETE 删除
-        async function deleteActivity(id) {
-            if (!confirm('确定删除这条活动吗？')) return;
-            try {
-                await api('/api/activities/' + id, { method: 'DELETE' });
-                showMsg('删除成功');
-                await loadActivities();
-            } catch (e) {
-                showMsg(e.message);
+                var name = els.name.value.trim();
+                var date = els.date.value.trim();
+                var location = els.location.value.trim();
+                var link = els.link.value.trim();
+
+                if (!name || !date || !location) {
+                    showMsg('请填写完整：活动名称、日期、地点都不能为空', 'err');
+                    return;
+                }
+
+                var payload = { name: name, date: date, location: location };
+                if (link) payload.link = link;
+
+                els.submit.disabled = true;
+                try {
+                    if (editingId === null) {
+                        await request('/api/activities', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        showMsg('新增成功', 'ok');
+                    } else {
+                        await request('/api/activities/' + editingId, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        showMsg('修改成功', 'ok');
+                    }
+                    exitEditMode();
+                    await loadActivities();      // 增删改后自动刷新列表
+                } catch (e) {
+                    showMsg(e.message, 'err');
+                } finally {
+                    els.submit.disabled = false;
+                }
             }
-        }
 
-        // 页面加载后自动拉取列表
-        loadActivities();
+            // ---------- 删除（成功后自动刷新） ----------
+            async function deleteActivity(id) {
+                if (!window.confirm('确定删除这条活动吗？')) return;
+
+                try {
+                    await request('/api/activities/' + id, { method: 'DELETE' });
+                    if (editingId === id) exitEditMode();
+                    showMsg('删除成功', 'ok');
+                    await loadActivities();      // 删除后自动刷新列表
+                } catch (e) {
+                    showMsg(e.message, 'err');
+                }
+            }
+
+            // ---------- 暴露给内联 onclick ----------
+            window.startEdit = enterEditMode;
+            window.deleteActivity = deleteActivity;
+            window.filterTable = filterTable;
+
+            // ---------- 事件绑定 ----------
+            els.form.addEventListener('submit', handleSubmit);
+            els.cancel.addEventListener('click', exitEditMode);
+            els.refresh.addEventListener('click', loadActivities);
+
+            // ---------- 启动 ----------
+            els.apiInfo.textContent = '后端：' + (API_BASE || '未配置');
+            loadActivities();
+        })();
     </script>
 </body>
 </html>
