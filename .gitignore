@@ -1,2 +1,12 @@
 node_modules/
 npm-debug.log*
+
+# 环境变量（含 API Key，绝对不能提交）
+.env
+.env.local
+.env.*.local
+
+# 测试残留文件
+my-api
+error.json
+test.json

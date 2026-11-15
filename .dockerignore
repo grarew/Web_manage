@@ -8,3 +8,9 @@ docs
 !README.md
 Dockerfile
 .dockerignore
+# 敏感与残留文件，绝不进镜像
+.env
+.env.*
+my-api
+error.json
+test.json

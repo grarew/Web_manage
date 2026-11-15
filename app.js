@@ -18,9 +18,58 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+// ---------- 环境变量加载（.env 文件，API Key 只放这里，绝不进代码） ----------
+// 优先读项目根目录的 .env，把 DEEPSEEK_API_KEY 等注入 process.env
+(function loadEnv() {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (!fs.existsSync(envPath)) return;
+    const content = fs.readFileSync(envPath, 'utf8');
+    content.split(/\r?\n/).forEach(function (line) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m) return;
+      const key = m[1];
+      let val = m[2];
+      // 去掉首尾引号
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (process.env[key] === undefined) process.env[key] = val;
+    });
+  } catch (e) {
+    console.warn('[env] 读取 .env 失败，将只使用系统环境变量：', e.message);
+  }
+})();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
+
+// ---------- 大模型对话配置（全部来自环境变量，代码里不含任何 Key） ----------
+const CHAT = {
+  // DeepSeek 开放平台接口地址
+  baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+  apiKey: process.env.DEEPSEEK_API_KEY || '',
+  model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+  // 上下文窗口上限（字符数），超长时从最早的历史消息开始丢弃
+  maxContextChars: Number(process.env.CHAT_MAX_CONTEXT_CHARS) || 12000,
+  // 历史消息条数上限（额外保险）
+  maxHistoryTurns: Number(process.env.CHAT_MAX_HISTORY_TURNS) || 20,
+  // 请求超时（毫秒）
+  timeoutMs: Number(process.env.CHAT_TIMEOUT_MS) || 60000
+};
+
+// ---------- 系统提示词：把角色和边界说清楚 ----------
+const SYSTEM_PROMPT =
+  '你是「活动通知助手」，一名帮助用户了解和管理活动信息的智能助理。\n' +
+  '你的职责：\n' +
+  '1. 友好、简洁地回答用户关于活动安排、场地、日期等各类问题；\n' +
+  '2. 协助用户组织活动信息，给出清晰、有条理的建议；\n' +
+  '3. 使用中文回复。\n' +
+  '你的边界：\n' +
+  '- 只处理与活动、通知、日程相关的话题；\n' +
+  '- 不提供医疗、法律、投资等专业建议；\n' +
+  '- 不编造不确定的信息，不确定时如实说明。';
 
 // 种子数据：首次没有 data.json 时用于初始化
 const SEED = [
@@ -99,6 +148,173 @@ function parseId(req) {
 }
 
 // ---------- 接口 ----------
+
+// ======================================================================
+// 流式对话接口（SSE）：后端转发调用 DeepSeek，Key 只在服务端环境变量
+// ======================================================================
+// 请求体：{ messages: [{ role: 'user'|'assistant', content: string }, ...] }
+// 前端只传最近的对话历史，服务端负责拼接系统提示词 + 截断超长上下文
+// 响应：text/event-stream，逐字向前端推送大模型输出
+app.post('/api/chat', async (req, res) => {
+  // 1) 未配置 Key 时给出友好提示，而不是甩 500
+  if (!CHAT.apiKey) {
+    return fail(res, 500, '服务端尚未配置 DEEPSEEK_API_KEY，请在 .env 中填写后再试');
+  }
+
+  // 2) 校验请求体
+  const body = req.body;
+  if (!body || !Array.isArray(body.messages)) {
+    return fail(res, 400, 'messages 必须是数组');
+  }
+
+  const history = body.messages
+    .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'; })
+    .map(function (m) { return { role: m.role, content: m.content }; });
+
+  if (history.length === 0) {
+    return fail(res, 400, 'messages 不能为空');
+  }
+
+  // 3) 拼接系统提示词 + 截断上下文（超长就从最早的开始丢）
+  const messages = [ { role: 'system', content: SYSTEM_PROMPT } ].concat(history);
+  let truncated = false;
+  while (messages.length > 1) {
+    const total = messages.reduce(function (n, m) { return n + m.content.length; }, 0);
+    if (total <= CHAT.maxContextChars) break;
+    // 系统提示词（下标 0）不动，从最早的历史消息开始丢弃
+    const removed = messages.splice(1, 1)[0];
+    if (removed && removed.role === 'user') truncated = true;
+  }
+  // 条数上限保险
+  while (messages.length - 1 > CHAT.maxHistoryTurns) {
+    messages.splice(1, 1);
+    truncated = true;
+  }
+
+  // 4) 设置 SSE 响应头
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders && res.flushHeaders();
+
+  // SSE 发送工具
+  const send = (event, data) => {
+    if (res.writableEnded) return;
+    res.write('event: ' + event + '\n');
+    res.write('data: ' + JSON.stringify(data) + '\n\n');
+  };
+
+  // 提示前端上下文已被截断
+  if (truncated) {
+    send('notice', { text: '（对话较长，已自动丢弃最早的部分上下文）' });
+  }
+
+  // 5) 后端调用 DeepSeek（原生 fetch，Node 18+ 自带）
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CHAT.timeoutMs);
+
+  // 客户端断开（停止生成）时，中断上游请求
+  req.on('close', () => {
+    if (!res.writableEnded) controller.abort();
+  });
+
+  try {
+    const upstream = await fetch(CHAT.baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + CHAT.apiKey
+      },
+      body: JSON.stringify({
+        model: CHAT.model,
+        messages: messages,
+        stream: true,
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    });
+
+    // 6) 非 2xx 错误映射成可读提示
+    if (!upstream.ok) {
+      let detail = '';
+      try {
+        const errBody = await upstream.json();
+        detail = (errBody && errBody.error && errBody.error.message) || JSON.stringify(errBody);
+      } catch (e) { /* ignore */ }
+      clearTimeout(timeout);
+
+      const status = upstream.status;
+      let friendly;
+      if (status === 401) {
+        friendly = 'API Key 无效或已失效，请检查 .env 里的 DEEPSEEK_API_KEY 是否正确（401 未授权）';
+      } else if (status === 402) {
+        friendly = '账户余额不足，请前往 DeepSeek 开放平台充值（402 余额不足）';
+      } else if (status === 429) {
+        friendly = '请求过于频繁，触发了限流，请稍后再试（429 限流）';
+      } else if (status >= 500) {
+        friendly = '大模型服务暂时不可用，请稍后重试（' + status + '）';
+      } else {
+        friendly = '大模型请求失败（HTTP ' + status + '）' + (detail ? '：' + detail : '');
+      }
+      send('error', { message: friendly });
+      res.end();
+      return;
+    }
+
+    // 7) 逐行解析上游 SSE，转发增量文本给前端
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') {
+          send('done', {});
+          clearTimeout(timeout);
+          res.end();
+          return;
+        }
+        try {
+          const json = JSON.parse(payload);
+          const delta = json.choices && json.choices[0] && json.choices[0].delta;
+          const text = delta && delta.content;
+          if (text) send('delta', { text: text });
+        } catch (e) { /* 忽略无法解析的行 */ }
+      }
+    }
+
+    // 正常结束（没有 [DONE] 标记时兜底）
+    send('done', {});
+    clearTimeout(timeout);
+    res.end();
+  } catch (e) {
+    clearTimeout(timeout);
+    let friendly;
+    if (e && e.name === 'AbortError') {
+      // 区分「用户主动停止」和「超时」
+      if (res.writableEnded) return; // 客户端已断开，无需再发
+      friendly = '请求超时，请重试（已等待 ' + (CHAT.timeoutMs / 1000) + ' 秒）';
+    } else {
+      friendly = '网络或服务异常：' + (e.message || String(e));
+    }
+    if (!res.writableEnded) {
+      send('error', { message: friendly });
+      res.end();
+    }
+  }
+});
 
 // GET 列表
 app.get('/api/activities', (req, res) => {

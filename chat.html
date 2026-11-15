@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 活动助手 · 流式对话</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            margin: 0;
+            background: #f5f6f8;
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: #4a90d9;
+            color: #fff;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+        header .sub { font-size: 12px; opacity: .85; }
+        header .spacer { flex: 1; }
+        header a {
+            color: #fff;
+            font-size: 13px;
+            text-decoration: none;
+            background: rgba(255,255,255,.18);
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+        header a:hover { background: rgba(255,255,255,.3); }
+
+        #chatbox {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .msg {
+            max-width: 72%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            line-height: 1.7;
+            font-size: 15px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .msg.user {
+            align-self: flex-end;
+            background: #4a90d9;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.assistant {
+            align-self: flex-start;
+            background: #fff;
+            border: 1px solid #e4e6ea;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+        }
+        .msg.notice {
+            align-self: center;
+            background: #fff7e6;
+            color: #a8761a;
+            border: 1px solid #ffe0a3;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+        .msg.error {
+            align-self: flex-start;
+            background: #fdeaea;
+            color: #c0392b;
+            border: 1px solid #f5c6c6;
+        }
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: #4a90d9;
+            vertical-align: text-bottom;
+            margin-left: 2px;
+            animation: blink .8s steps(1) infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        footer {
+            padding: 12px 20px;
+            background: #fff;
+            border-top: 1px solid #e4e6ea;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        textarea {
+            flex: 1;
+            resize: none;
+            padding: 10px 12px;
+            border: 1px solid #d5d8dd;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            line-height: 1.5;
+            min-height: 44px;
+            max-height: 120px;
+            outline: none;
+        }
+        textarea:focus { border-color: #4a90d9; }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background .15s;
+            white-space: nowrap;
+        }
+        #sendBtn { background: #4a90d9; color: #fff; }
+        #sendBtn:hover { background: #3a7bc0; }
+        #sendBtn:disabled { background: #a8c6e8; cursor: not-allowed; }
+        #stopBtn {
+            background: #e05555;
+            color: #fff;
+        }
+        #stopBtn:hover { background: #c94343; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>AI 活动助手</h1>
+        <span class="sub">流式对话 · DeepSeek</span>
+        <span class="spacer"></span>
+        <a href="index.html">← 返回活动管理</a>
+    </header>
+
+    <div id="chatbox"></div>
+
+    <footer>
+        <div class="input-row">
+            <textarea id="input" placeholder="问我关于活动安排的问题…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <button id="sendBtn">发送</button>
+            <button id="stopBtn" hidden>停止生成</button>
+        </div>
+    </footer>
+
+    <script src="config.js"></script>
+    <script>
+        (function () {
+            'use strict';
+
+            var cfg = window.APP_CONFIG || {};
+            var API_BASE = String(cfg.API_BASE || '').replace(/\/+$/, '');
+
+            var chatbox = document.getElementById('chatbox');
+            var input = document.getElementById('input');
+            var sendBtn = document.getElementById('sendBtn');
+            var stopBtn = document.getElementById('stopBtn');
+
+            // 对话历史（前端只保留最近若干条，服务端会再做截断）
+            var history = [];
+            var streaming = false;
+            var aborter = null;
+
+            // 当前正在生成的 assistant 气泡
+            var currentBubble = null;
+            var currentText = '';
+
+            function scrollToBottom() {
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
+
+            function addBubble(role, text) {
+                var div = document.createElement('div');
+                div.className = 'msg ' + role;
+                div.textContent = text;
+                chatbox.appendChild(div);
+                scrollToBottom();
+                return div;
+            }
+
+            function addNotice(text) {
+                var div = document.createElement('div');
+                div.className = 'msg notice';
+                div.textContent = text;
+                chatbox.appendChild(div);
+                scrollToBottom();
+            }
+
+            function addError(text) {
+                var div = document.createElement('div');
+                div.className = 'msg error';
+                div.textContent = text;
+                chatbox.appendChild(div);
+                scrollToBottom();
+            }
+
+            function setStreaming(on) {
+                streaming = on;
+                sendBtn.disabled = on;
+                stopBtn.hidden = !on;
+                if (on) input.disabled = true; else input.disabled = false;
+                if (!on) input.focus();
+            }
+
+            // 停止生成：中断前端 fetch，服务端会随之中断上游
+            function stopGenerate() {
+                if (aborter) aborter.abort();
+            }
+
+            async function sendMessage() {
+                var text = input.value.trim();
+                if (!text || streaming) return;
+
+                // 用户消息上屏并写入历史
+                addBubble('user', text);
+                history.push({ role: 'user', content: text });
+                input.value = '';
+                input.style.height = 'auto';
+
+                // 准备 assistant 气泡
+                currentBubble = addBubble('assistant', '');
+                currentText = '';
+
+                aborter = new AbortController();
+                setStreaming(true);
+
+                try {
+                    var res = await fetch(API_BASE + '/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messages: history }),
+                        signal: aborter.signal
+                    });
+
+                    // 后端先返回 JSON 错误（如未配置 Key、参数错误）
+                    var ct = res.headers.get('content-type') || '';
+                    if (!ct.includes('text/event-stream')) {
+                        var j = null;
+                        try { j = await res.json(); } catch (e) {}
+                        var msg = (j && j.msg) ? j.msg : ('请求失败（HTTP ' + res.status + '）');
+                        throw new Error(msg);
+                    }
+
+                    // 解析 SSE
+                    var reader = res.body.getReader();
+                    var decoder = new TextDecoder('utf-8');
+                    var buffer = '';
+                    var finished = false;
+
+                    while (!finished) {
+                        var chunk = await reader.read();
+                        if (chunk.done) break;
+                        buffer += decoder.decode(chunk.value, { stream: true });
+
+                        var idx;
+                        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                            var rawEvent = buffer.slice(0, idx);
+                            buffer = buffer.slice(idx + 2);
+
+                            var event = 'message';
+                            var data = '';
+                            rawEvent.split('\n').forEach(function (line) {
+                                if (line.startsWith('event:')) event = line.slice(6).trim();
+                                else if (line.startsWith('data:')) data += line.slice(5).trim();
+                            });
+                            if (!data) continue;
+
+                            var payload = null;
+                            try { payload = JSON.parse(data); } catch (e) { continue; }
+
+                            if (event === 'delta') {
+                                currentText += payload.text || '';
+                                currentBubble.textContent = currentText;
+                                scrollToBottom();
+                            } else if (event === 'notice') {
+                                addNotice(payload.text || '');
+                            } else if (event === 'error') {
+                                // 流已开始时出错：保留已生成内容，追加错误提示
+                                if (currentText) {
+                                    // 已生成内容保留在气泡里，另起错误提示
+                                    history.push({ role: 'assistant', content: currentText });
+                                    currentBubble = null;
+                                } else {
+                                    currentBubble.remove();
+                                    currentBubble = null;
+                                }
+                                addError(payload.message || '生成失败');
+                                finished = true;
+                            } else if (event === 'done') {
+                                finished = true;
+                            }
+                        }
+                    }
+
+                    // 收尾：把这次 assistant 回复写入历史
+                    if (currentBubble) {
+                        var finalText = currentBubble.textContent || '';
+                        if (finalText.trim()) {
+                            history.push({ role: 'assistant', content: finalText });
+                        } else {
+                            currentBubble.remove();
+                        }
+                        currentBubble = null;
+                    }
+
+                    // 前端也做历史裁剪，防止越滚越大
+                    trimHistory();
+                } catch (e) {
+                    // 用户主动停止
+                    if (e && e.name === 'AbortError') {
+                        var stoppedText = currentText || currentBubble.textContent || '';
+                        if (currentBubble) {
+                            if (stoppedText.trim()) {
+                                history.push({ role: 'assistant', content: stoppedText });
+                            } else {
+                                currentBubble.remove();
+                            }
+                            currentBubble = null;
+                        }
+                        addNotice('已停止生成。');
+                        trimHistory();
+                    } else if (e && e.name === 'TypeError') {
+                        addError('无法连接后端服务。请确认已运行 node app.js，并检查 config.js 里的 API_BASE 地址。');
+                    } else {
+                        if (currentBubble) {
+                            if (currentBubble.textContent.trim()) {
+                                history.push({ role: 'assistant', content: currentBubble.textContent });
+                            } else {
+                                currentBubble.remove();
+                            }
+                            currentBubble = null;
+                        }
+                        addError(e.message || String(e));
+                    }
+                } finally {
+                    aborter = null;
+                    setStreaming(false);
+                }
+            }
+
+            // 前端历史裁剪：只保留最近 20 条，超长优先丢最早的
+            function trimHistory() {
+                var MAX = 20;
+                if (history.length > MAX) {
+                    history = history.slice(history.length - MAX);
+                }
+                var total = history.reduce(function (n, m) { return n + m.content.length; }, 0);
+                while (total > 8000 && history.length > 2) {
+                    total -= history[0].content.length;
+                    history.shift();
+                }
+            }
+
+            // 事件绑定
+            sendBtn.addEventListener('click', sendMessage);
+            stopBtn.addEventListener('click', stopGenerate);
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // textarea 自适应高度
+            input.addEventListener('input', function () {
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+            });
+
+            // 开场欢迎语
+            addBubble('assistant', '你好，我是 AI 活动助手！可以问我活动安排、场地、日期等各类问题。');
+        })();
+    </script>
+</body>
+</html>
