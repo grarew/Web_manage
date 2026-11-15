@@ -117,6 +117,21 @@ function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
+// ---------- 把活动数据转成给 AI 看的上下文文本 ----------
+// 让大模型能"看到"网页里的活动信息，从而准确回答"有哪些活动、在哪办"等问题
+function buildActivityContext(activities) {
+  if (!Array.isArray(activities) || activities.length === 0) {
+    return '【当前活动数据】\n暂无任何活动。';
+  }
+  const lines = activities.map(function (a) {
+    return '- ID ' + a.id + '：' + a.name +
+      '（日期：' + a.date + '，地点：' + a.location + '）' +
+      (a.link ? '，详情页：' + a.link : '');
+  });
+  return '【当前活动数据】（共 ' + activities.length + ' 条，回答用户问题时请以这里的真实数据为准，不要凭空编造）\n' +
+    lines.join('\n');
+}
+
 // ---------- 参数校验 ----------
 function validateActivity(body) {
   const errors = [];
@@ -175,8 +190,21 @@ app.post('/api/chat', async (req, res) => {
     return fail(res, 400, 'messages 不能为空');
   }
 
-  // 3) 拼接系统提示词 + 截断上下文（超长就从最早的开始丢）
-  const messages = [ { role: 'system', content: SYSTEM_PROMPT } ].concat(history);
+  // 3) 读取当前活动数据，注入到系统提示词，让 AI 能"看到"网页里的活动信息
+  let activitiesSnapshot = [];
+  try {
+    activitiesSnapshot = readData();
+    if (!Array.isArray(activitiesSnapshot)) activitiesSnapshot = [];
+  } catch (e) {
+    activitiesSnapshot = [];
+  }
+
+  const activityInfo = buildActivityContext(activitiesSnapshot);
+
+  // 4) 拼接系统提示词 + 数据上下文 + 截断上下文（超长就从最早的开始丢）
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT + '\n\n' + activityInfo }
+  ].concat(history);
   let truncated = false;
   while (messages.length > 1) {
     const total = messages.reduce(function (n, m) { return n + m.content.length; }, 0);
