@@ -217,7 +217,9 @@ app.post('/api/chat', async (req, res) => {
   const timeout = setTimeout(() => controller.abort(), CHAT.timeoutMs);
 
   // 客户端断开（停止生成）时，中断上游请求
-  req.on('close', () => {
+  // 注意：必须监听 res 的 close（响应连接关闭），而非 req 的 close。
+  // 在 Node 新版中，req 的 close 会在请求体读完时就触发，导致误中断。
+  res.on('close', () => {
     if (!res.writableEnded) controller.abort();
   });
 
