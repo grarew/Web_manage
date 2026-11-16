@@ -66,10 +66,133 @@ const SYSTEM_PROMPT =
   '1. 友好、简洁地回答用户关于活动安排、场地、日期等各类问题；\n' +
   '2. 协助用户组织活动信息，给出清晰、有条理的建议；\n' +
   '3. 使用中文回复。\n' +
+  '你能执行的操作：\n' +
+  '- 你可以调用工具来「新增」「修改」「删除」活动；\n' +
+  '- 当用户明确要求增删改活动时，直接调用对应工具即可，不要用文字代替。\n' +
+  '重要约束：\n' +
+  '- 删除活动前，如果用户没有明确指定目标，先向用户确认要删除哪一条；\n' +
+  '- 新增或修改活动时，日期、地点等信息如果用户没说全，先询问补齐，不要瞎猜。\n' +
   '你的边界：\n' +
   '- 只处理与活动、通知、日程相关的话题；\n' +
   '- 不提供医疗、法律、投资等专业建议；\n' +
   '- 不编造不确定的信息，不确定时如实说明。';
+
+// ---------- 工具定义（Function Calling）：让 AI 能真正增删改活动 ----------
+// 每个工具对应一个已有的活动接口操作，AI 决定调用后由后端真实执行
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'add_activity',
+      description: '新增一条活动。当用户明确要求添加、创建、登记一个新的活动时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '活动名称，例如"秋季运动会"' },
+          date: { type: 'string', description: '活动日期，例如"2027年10月1日"' },
+          location: { type: 'string', description: '活动地点，例如"学校体育馆"' }
+        },
+        required: ['name', 'date', 'location']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_activity',
+      description: '修改一条已有活动。当用户要求更改某个活动的名称、日期或地点时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer', description: '要修改的活动 ID' },
+          name: { type: 'string', description: '新的活动名称' },
+          date: { type: 'string', description: '新的活动日期' },
+          location: { type: 'string', description: '新的活动地点' }
+        },
+        required: ['id', 'name', 'date', 'location']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_activity',
+      description: '删除一条活动。当用户明确要求删除、移除某个活动时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer', description: '要删除的活动 ID' }
+        },
+        required: ['id']
+      }
+    }
+  }
+];
+
+// ---------- 工具执行器：AI 决定调用后，这里真正操作 data.json ----------
+// 复用现有的 validateActivity 校验逻辑，保证和手动操作行为一致
+function executeTool(name, args) {
+  if (name === 'add_activity') {
+    const errors = validateActivity(args);
+    if (errors.length > 0) {
+      return { ok: false, message: errors.join('；') };
+    }
+    const data = readData();
+    const nextId = data.length ? Math.max(...data.map((a) => a.id)) + 1 : 1;
+    const item = {
+      id: nextId,
+      name: args.name.trim(),
+      date: args.date.trim(),
+      location: args.location.trim(),
+      link: ''
+    };
+    data.push(item);
+    writeData(data);
+    return { ok: true, message: '已新增活动「' + item.name + '」（ID ' + item.id + '）', data: item };
+  }
+
+  if (name === 'update_activity') {
+    const id = Number(args.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return { ok: false, message: 'id 必须是正整数' };
+    }
+    const errors = validateActivity(args);
+    if (errors.length > 0) {
+      return { ok: false, message: errors.join('；') };
+    }
+    const data = readData();
+    const idx = data.findIndex((a) => a.id === id);
+    if (idx === -1) {
+      return { ok: false, message: '活动不存在（ID ' + id + '）' };
+    }
+    data[idx] = {
+      id: id,
+      name: args.name.trim(),
+      date: args.date.trim(),
+      location: args.location.trim(),
+      link: data[idx].link || ''
+    };
+    writeData(data);
+    return { ok: true, message: '已修改活动 ID ' + id + ' 为「' + args.name.trim() + '」', data: data[idx] };
+  }
+
+  if (name === 'delete_activity') {
+    const id = Number(args.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return { ok: false, message: 'id 必须是正整数' };
+    }
+    const data = readData();
+    const idx = data.findIndex((a) => a.id === id);
+    if (idx === -1) {
+      return { ok: false, message: '活动不存在（ID ' + id + '）' };
+    }
+    const removed = data.splice(idx, 1)[0];
+    writeData(data);
+    return { ok: true, message: '已删除活动「' + removed.name + '」（ID ' + id + '）', data: removed };
+  }
+
+  return { ok: false, message: '未知工具：' + name };
+}
 
 // 种子数据：首次没有 data.json 时用于初始化
 const SEED = [
@@ -240,19 +363,61 @@ app.post('/api/chat', async (req, res) => {
     send('notice', { text: '（对话较长，已自动丢弃最早的部分上下文）' });
   }
 
-  // 5) 后端调用 DeepSeek（原生 fetch，Node 18+ 自带）
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CHAT.timeoutMs);
-
-  // 客户端断开（停止生成）时，中断上游请求
+  // 5) 客户端断开（停止生成）时，中断上游请求
   // 注意：必须监听 res 的 close（响应连接关闭），而非 req 的 close。
   // 在 Node 新版中，req 的 close 会在请求体读完时就触发，导致误中断。
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CHAT.timeoutMs);
   res.on('close', () => {
     if (!res.writableEnded) controller.abort();
   });
 
-  try {
-    const upstream = await fetch(CHAT.baseUrl + '/chat/completions', {
+  // 把 DeepSeek 的 HTTP 错误映射成可读中文提示
+  function mapUpstreamError(status, detail) {
+    if (status === 401) {
+      return 'API Key 无效或已失效，请检查 .env 里的 DEEPSEEK_API_KEY 是否正确（401 未授权）';
+    }
+    if (status === 402) {
+      return '账户余额不足，请前往 DeepSeek 开放平台充值（402 余额不足）';
+    }
+    if (status === 429) {
+      return '请求过于频繁，触发了限流，请稍后再试（429 限流）';
+    }
+    if (status >= 500) {
+      return '大模型服务暂时不可用，请稍后重试（' + status + '）';
+    }
+    return '大模型请求失败（HTTP ' + status + '）' + (detail ? '：' + detail : '');
+  }
+
+  // 非流式调用 DeepSeek，返回解析后的完整 JSON（用于工具决策阶段）
+  async function callNonStream(reqMessages, withTools) {
+    const bodyObj = {
+      model: CHAT.model,
+      messages: reqMessages,
+      stream: false,
+      temperature: 0.7
+    };
+    if (withTools) bodyObj.tools = TOOLS;
+    const r = await fetch(CHAT.baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + CHAT.apiKey
+      },
+      body: JSON.stringify(bodyObj),
+      signal: controller.signal
+    });
+    if (!r.ok) {
+      let detail = '';
+      try { const eb = await r.json(); detail = (eb && eb.error && eb.error.message) || JSON.stringify(eb); } catch (e) {}
+      throw new Error(mapUpstreamError(r.status, detail));
+    }
+    return await r.json();
+  }
+
+  // 流式调用 DeepSeek，把增量文本通过 send('delta') 推给前端
+  async function callStream(reqMessages) {
+    const r = await fetch(CHAT.baseUrl + '/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -260,62 +425,32 @@ app.post('/api/chat', async (req, res) => {
       },
       body: JSON.stringify({
         model: CHAT.model,
-        messages: messages,
+        messages: reqMessages,
         stream: true,
         temperature: 0.7
       }),
       signal: controller.signal
     });
-
-    // 6) 非 2xx 错误映射成可读提示
-    if (!upstream.ok) {
+    if (!r.ok) {
       let detail = '';
-      try {
-        const errBody = await upstream.json();
-        detail = (errBody && errBody.error && errBody.error.message) || JSON.stringify(errBody);
-      } catch (e) { /* ignore */ }
-      clearTimeout(timeout);
-
-      const status = upstream.status;
-      let friendly;
-      if (status === 401) {
-        friendly = 'API Key 无效或已失效，请检查 .env 里的 DEEPSEEK_API_KEY 是否正确（401 未授权）';
-      } else if (status === 402) {
-        friendly = '账户余额不足，请前往 DeepSeek 开放平台充值（402 余额不足）';
-      } else if (status === 429) {
-        friendly = '请求过于频繁，触发了限流，请稍后再试（429 限流）';
-      } else if (status >= 500) {
-        friendly = '大模型服务暂时不可用，请稍后重试（' + status + '）';
-      } else {
-        friendly = '大模型请求失败（HTTP ' + status + '）' + (detail ? '：' + detail : '');
-      }
-      send('error', { message: friendly });
-      res.end();
-      return;
+      try { const eb = await r.json(); detail = (eb && eb.error && eb.error.message) || JSON.stringify(eb); } catch (e) {}
+      throw new Error(mapUpstreamError(r.status, detail));
     }
 
-    // 7) 逐行解析上游 SSE，转发增量文本给前端
-    const reader = upstream.body.getReader();
+    const reader = r.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-
       let idx;
       while ((idx = buffer.indexOf('\n')) !== -1) {
         const line = buffer.slice(0, idx).trim();
         buffer = buffer.slice(idx + 1);
         if (!line.startsWith('data:')) continue;
         const payload = line.slice(5).trim();
-        if (payload === '[DONE]') {
-          send('done', {});
-          clearTimeout(timeout);
-          res.end();
-          return;
-        }
+        if (payload === '[DONE]') return;
         try {
           const json = JSON.parse(payload);
           const delta = json.choices && json.choices[0] && json.choices[0].delta;
@@ -324,8 +459,47 @@ app.post('/api/chat', async (req, res) => {
         } catch (e) { /* 忽略无法解析的行 */ }
       }
     }
+  }
 
-    // 正常结束（没有 [DONE] 标记时兜底）
+  try {
+    // ========== 第一阶段：工具决策（非流式，带 tools） ==========
+    const firstResp = await callNonStream(messages, true);
+    const choice = firstResp.choices && firstResp.choices[0];
+    const toolCalls = choice && choice.message && choice.message.tool_calls;
+
+    // AI 决定调用工具 → 执行 → 结果回传 → 第二阶段流式生成最终回复
+    if (toolCalls && toolCalls.length > 0) {
+      // 把 AI 的 assistant 消息（含 tool_calls）追加进上下文
+      messages.push(choice.message);
+
+      // 依次执行每个工具，把结果作为 role=tool 消息追加
+      for (let i = 0; i < toolCalls.length; i++) {
+        const tc = toolCalls[i];
+        const fnName = tc.function && tc.function.name;
+        let fnArgs = {};
+        try { fnArgs = JSON.parse(tc.function && tc.function.arguments || '{}'); } catch (e) { fnArgs = {}; }
+
+        const result = executeTool(fnName, fnArgs);
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: result.message
+        });
+
+        // 工具执行后，前端提示一下操作结果（便于用户感知发生了什么）
+        send('notice', { text: result.message });
+      }
+
+      // ========== 第二阶段：流式生成最终回复 ==========
+      await callStream(messages);
+      send('done', {});
+      clearTimeout(timeout);
+      res.end();
+      return;
+    }
+
+    // AI 不需要调工具 → 直接流式生成回复
+    await callStream(messages);
     send('done', {});
     clearTimeout(timeout);
     res.end();
