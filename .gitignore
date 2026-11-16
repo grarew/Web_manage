@@ -6,7 +6,5 @@ npm-debug.log*
 .env.local
 .env.*.local
 
-# 测试残留文件
-my-api
-error.json
-test.json
+# 运行时生成的日志与临时文件
+*.log

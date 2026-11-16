@@ -1,94 +1,177 @@
-# 活动通知接口 · 快速上手
+# 活动通知管理 · AI 智能助手
 
-## 一、启动命令
+一个集「活动管理」与「AI 对话」于一体的单服务 Web 应用：**一个页面、一套接口、一个数据存储、一个 AI 能力，四者互相打通**。
 
-在本项目目录（`Web_manage`）打开终端，执行：
+- 用户可以通过网页界面（或 AI 对话）对活动进行**增、删、改、查**；
+- 所有操作落盘到本地 `data.json`，重启不丢失；
+- 内置 DeepSeek 大模型，AI 助手既能**读懂活动数据回答问题**，也能**调用工具真正新增 / 修改 / 删除活动**。
+
+---
+
+## 一、项目简介（解决什么问题）
+
+很多活动通知类小工具只有「展示」，管理动作要人工改文件或写 SQL。本项目要解决的是：
+
+1. **活动管理太麻烦** —— 提供网页表单 + 列表，点几下就能增删改查；
+2. **数据不落地** —— 所有写入实时持久化到 `data.json`，刷新、重启都不丢；
+3. **AI 只是摆设** —— 让 AI 不再是"只会聊天"的玩具，而是能**真正读写活动数据**的智能助理；
+4. **Key 安全** —— 大模型 API Key 只放在服务端环境变量，绝不进前端代码。
+
+---
+
+## 二、技术栈
+
+| 分类 | 技术 | 说明 |
+|---|---|---|
+| 后端 | Node.js（≥18）+ Express | 提供 REST 接口 + 静态托管 + SSE 流式转发 |
+| 前端 | 原生 HTML / CSS / JavaScript | 无框架，`index.html`（管理页）、`chat.html`（对话页） |
+| 数据 | JSON 文件（`data.json`） | 同步读写落盘，零依赖数据库 |
+| AI | DeepSeek（deepseek-chat） | 兼容 OpenAI 格式，支持流式输出 + Function Calling |
+| 部署 | Docker / Railway / Render | 根目录含 `Dockerfile` 与 `render.yaml` |
+
+---
+
+## 三、本地运行步骤
+
+### 1. 安装依赖
 
 ```bash
-npm install     # 第一次运行才需要
-node app.js     # 启动服务，默认端口 3000
+npm install
 ```
 
-看到 `活动通知接口已启动: http://localhost:3000` 即成功。**此窗口不要关**，另开一个终端测试。
+### 2. 配置环境变量
 
-换端口：`set PORT=8080 && node app.js`
-
----
-
-## 二、接口文档表
-
-| 方法 | 路径 | 参数 | 返回示例 |
-|---|---|---|---|
-| `GET` | `/api/activities` | 无 | `{"code":0,"data":[{"id":1,"name":"春季运动会","date":"2027年5月1日","location":"学校操场","link":"content/chunjieyundonghui.html"}],"msg":"查询成功"}` |
-| `POST` | `/api/activities` | Body(JSON)：`name`、`date`、`location` 必填（string）；`link` 可选 | `{"code":0,"data":{"id":3,"name":"秋季运动会","date":"2027年10月1日","location":"学校体育馆","link":""},"msg":"新增成功"}` |
-| `PUT` | `/api/activities/:id` | Path：`id`（正整数）<br>Body：同 POST | `{"code":0,"data":{"id":3,"name":"秋季运动会(改)","date":"2027年10月2日","location":"大礼堂","link":""},"msg":"修改成功"}` |
-| `DELETE` | `/api/activities/:id` | Path：`id`（正整数） | `{"code":0,"data":{"id":3,...},"msg":"删除成功"}` |
-
----
-
-## 三、返回格式
-
-所有接口统一返回：
-
-```json
-{ "code": 0, "data": null, "msg": "success" }
-```
-
-| 字段 | 说明 |
-|---|---|
-| `code` | `0` 成功；`400` / `404` / `500` 失败 |
-| `data` | 成功时为数据，失败时为 `null` |
-| `msg` | 提示信息 |
-
-**错误示例（少传字段 → 400）：**
-
-```json
-{"code":400,"data":null,"msg":"date 必填且必须是字符串；location 必填且必须是字符串"}
-```
-
----
-
-## 四、测试命令（curl）
+复制 `.env.example` 为 `.env`，填入你的 DeepSeek API Key：
 
 ```bash
-# 查列表
-curl http://localhost:3000/api/activities
+# Linux / macOS
+cp .env.example .env
 
-# 新增
-curl -X POST http://localhost:3000/api/activities -H "Content-Type: application/json" -d "{\"name\":\"秋季运动会\",\"date\":\"2027年10月1日\",\"location\":\"学校体育馆\"}"
-
-# 删除
-curl -X DELETE http://localhost:3000/api/activities/3
-
-# 少传字段，应返回 400
-curl -i -X POST http://localhost:3000/api/activities -H "Content-Type: application/json" -d "{\"name\":\"缺字段\"}"
+# Windows
+copy .env.example .env
 ```
 
-> PowerShell 下中文可能乱码，先执行：`$OutputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.Encoding]::UTF8`
-> 更完整的说明见 [API.md](API.md)
+编辑 `.env`：
+
+```dotenv
+# DeepSeek 开放平台 API Key（必填）
+# 获取地址：https://platform.deepseek.com → 左侧「API Keys」→ 创建
+DEEPSEEK_API_KEY=sk-你的Key
+
+# 以下均有默认值，一般无需修改
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+CHAT_MAX_CONTEXT_CHARS=12000
+CHAT_MAX_HISTORY_TURNS=20
+CHAT_TIMEOUT_MS=60000
+```
+
+> ⚠️ `.env` 已被 `.gitignore` 忽略，不会提交到代码库。**不要把 Key 写进前端 JS。**
+
+### 3. 启动服务
+
+```bash
+npm start
+# 或
+node app.js
+```
+
+看到 `活动通知接口已启动: http://localhost:3000` 即成功。
+
+### 4. 打开页面
+
+- 管理页：<http://localhost:3000/>
+- AI 对话页：<http://localhost:3000/chat.html>
 
 ---
 
-## 五、前端页面
+## 四、功能截图
 
-启动后直接访问 <http://localhost:3000/> 即可打开管理页面（Express 已托管静态文件）。
+### 活动管理页（增删改查）
 
-| 特性 | 说明 |
-|---|---|
-| 数据来源 | 全部由 `fetch` 调用接口渲染，**没有写死在 JS 数组里** |
-| 三种状态 | 加载中（转圈）/ 空数据（📭）/ 请求失败（⚠️ + 重试按钮） |
-| 自动刷新 | 新增、删除成功后自动重新拉取列表 |
-| 数据持久化 | 数据在 `data.json`，按 F5 或重启服务都不丢 |
-| 后端地址配置 | 抽在 [config.js](config.js)：同源部署留空，GitHub Pages 用 `PAGES_API_BASE` |
+![活动列表](screenshots/home-list.png)
 
-三态截图见 [screenshots/](screenshots/)；CORS 复现记录见 [docs/CORS问题记录.md](docs/CORS问题记录.md)；部署踩坑记录见 [docs/部署问题记录.md](docs/部署问题记录.md)；部署步骤见 [DEPLOY.md](DEPLOY.md)。
+### AI 对话页
 
-> **在线页面**：<https://grarew.github.io/Web_manage/>（GitHub Pages，会自动请求 `config.js` 里的 `PAGES_API_BASE`）
-> **单服务线上地址**：把后端部署到 Render 后，直接访问 Render 域名即可，页面和接口同源，不用改配置。
-> 一键部署入口：<https://render.com/deploy?repo=https://github.com/grarew/Web_manage>
+**欢迎界面**：
 
-重新生成截图（需要 `npm i -D puppeteer-core`）：
+![对话欢迎](screenshots/chat-welcome.png)
 
-```bash
-node scripts/screenshot.js
+**AI 查询活动**（数据注入，准确读出活动信息）：
+
+![AI 查询](screenshots/chat-query.png)
+
+**AI 新增活动**（工具调用，真正写入数据）：
+
+![AI 新增](screenshots/chat-add-activity.png)
+
+---
+
+## 五、接口一览
+
+统一返回格式 `{ code, data, msg }`，`code = 0` 表示成功。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/activities` | 获取活动列表 |
+| `POST` | `/api/activities` | 新增活动 |
+| `PUT` | `/api/activities/:id` | 修改活动 |
+| `DELETE` | `/api/activities/:id` | 删除活动 |
+| `POST` | `/api/chat` | AI 对话（SSE 流式 + 工具调用） |
+
+完整接口文档见 [API.md](API.md)。
+
+---
+
+## 六、AI 能力说明
+
+`/api/chat` 接口实现两个核心能力：
+
+1. **数据注入（读）**：每次对话前，后端读取 `data.json` 的活动列表注入系统提示词，AI 能准确回答「有哪些活动、在哪办」；
+2. **工具调用（写）**：通过 DeepSeek Function Calling 定义三个工具，AI 决定调用后由后端真正执行增删改：
+   - `add_activity` 新增活动
+   - `update_activity` 修改活动
+   - `delete_activity` 删除活动
+
+流式输出逐字推送给前端；支持「停止生成」；多轮对话带上下文，超长自动丢弃最早消息。
+
+---
+
+## 七、目录结构
+
 ```
+Web_manage/
+├── app.js                 # 后端入口：REST 接口 + 静态托管 + AI 对话(SSE)
+├── index.html             # 活动管理页（增删改查）
+├── chat.html              # AI 流式对话页
+├── config.js              # 前端 API 地址配置
+├── data.json              # 数据存储（活动列表）
+├── .env.example           # 环境变量模板
+├── .env                   # 本地环境变量（已忽略，不提交）
+├── package.json           # 依赖与脚本
+├── Dockerfile             # Docker 镜像
+├── render.yaml            # Render 部署蓝图
+├── content/               # 活动详情页
+├── images/                # 图片资源
+├── screenshots/           # 功能截图
+├── scripts/               # 截图 / 验证脚本
+└── docs/                  # 问题记录文档
+```
+
+---
+
+## 八、已知问题
+
+1. **数据存储用 JSON 文件，非数据库**：`data.json` 适合小规模演示；并发写入或大量数据时建议换 SQLite / PostgreSQL（只需改写 `readData` / `writeData` 两个函数）。
+2. **Railway / Render 免费版磁盘不持久**：重新部署或服务休眠后，`data.json` 会恢复成仓库初始数据；需长期保存要挂持久磁盘（Volume）。
+3. **AI 无鉴权，公网开放会消耗 Key 额度**：`/api/chat` 目前任何人可调用；若长期上线，建议加访问令牌或用量限制。
+4. **冷启动延迟**：免费托管平台无流量会休眠，首次访问需等待唤醒。
+5. **AI 删除操作暂无二次确认**：系统提示词已要求 AI 删除前先确认目标，但缺少强制的程序级确认；如需更严格，可在工具执行前加拦截。
+
+---
+
+## 九、部署
+
+- **Railway**：见 [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md)
+- **Render**：见 [DEPLOY.md](DEPLOY.md)
+- 两种平台均支持 Docker 或原生 Node 部署，`DEEPSEEK_API_KEY` 在平台的环境变量（Variables）中配置。
