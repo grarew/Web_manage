@@ -5,38 +5,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>活动通知管理</title>
     <style>
+        :root {
+            --primary: #4f6ef7;
+            --primary-dark: #3d5ae0;
+            --primary-light: #eef1fe;
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2430;
+            --text-muted: #8a91a3;
+            --border: #e7eaf2;
+            --danger: #ef5350;
+            --danger-dark: #d9413e;
+            --success: #22a06b;
+            --radius: 14px;
+            --shadow-sm: 0 1px 3px rgba(23, 43, 99, .06);
+            --shadow: 0 6px 24px rgba(23, 43, 99, .08);
+        }
         * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body {
-            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-family: "Microsoft YaHei", "Segoe UI", -apple-system, sans-serif;
             margin: 0;
-            background: #f5f6f8;
-            color: #333;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
         }
+
+        /* ---------- 顶部导航 ---------- */
         header {
-            background: #898888f1;
-            padding: 24px 16px;
-            text-align: center;
+            background: linear-gradient(120deg, #4f6ef7 0%, #6a5cf0 100%);
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
             color: #fff;
+            box-shadow: 0 2px 12px rgba(79, 110, 247, .28);
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
-        header h1 { margin: 0 0 8px; font-size: 26px; }
-        header marquee { font-size: 14px; opacity: .9; }
+        header .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: .5px;
+        }
+        header .brand .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(255,255,255,.22);
+        }
+        header .spacer { flex: 1; }
+        header a.cta {
+            color: #fff;
+            font-size: 14px;
+            text-decoration: none;
+            background: rgba(255,255,255,.16);
+            padding: 8px 16px;
+            border-radius: 999px;
+            transition: background .18s, transform .18s;
+            border: 1px solid rgba(255,255,255,.25);
+        }
+        header a.cta:hover { background: rgba(255,255,255,.28); transform: translateY(-1px); }
 
         main {
-            max-width: 1000px;
+            max-width: 1060px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 24px 16px 48px;
         }
+
         .card {
-            background: #fff;
-            border-radius: 10px;
-            padding: 18px 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            transition: box-shadow .2s;
         }
+        .card:hover { box-shadow: var(--shadow); }
         .card h2 {
-            margin: 0 0 14px;
-            font-size: 17px;
-            color: #444;
+            margin: 0 0 16px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card h2::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            border-radius: 2px;
+            background: var(--primary);
         }
 
         .form-row {
@@ -46,76 +113,116 @@
             align-items: center;
         }
         .form-row input {
-            padding: 8px 10px;
-            border: 1px solid #d5d8dd;
-            border-radius: 6px;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
             font-size: 14px;
             width: 200px;
             outline: none;
+            transition: border-color .15s, box-shadow .15s;
+            background: #fbfcfe;
         }
         #dateInput { width: 250px; }
         #locationInput { width: 150px; }
         #linkInput { width: 260px; }
-        .form-row input:focus { border-color: #4a90d9; }
+        .form-row input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+            background: #fff;
+        }
+        .form-row input::placeholder { color: #b3bac9; }
 
         button {
-            padding: 8px 16px;
+            padding: 9px 18px;
             border: none;
-            border-radius: 6px;
-            background: #4a90d9;
+            border-radius: 10px;
+            background: var(--primary);
             color: #fff;
             font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: background .15s;
+            transition: background .16s, transform .1s, box-shadow .16s;
+            box-shadow: 0 2px 6px rgba(79, 110, 247, .28);
         }
-        button:hover { background: #3a7bc0; }
-        button.secondary { background: #8e949c; }
-        button.secondary:hover { background: #767c85; }
-        button.danger { background: #e05555; }
-        button.danger:hover { background: #c94343; }
-        button.small { padding: 5px 10px; font-size: 13px; }
+        button:hover { background: var(--primary-dark); }
+        button:active { transform: translateY(1px); }
+        button:disabled { opacity: .55; cursor: not-allowed; }
+        button.secondary {
+            background: #fff;
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        button.secondary:hover { background: #f4f6fb; }
+        button.danger { background: var(--danger); box-shadow: 0 2px 6px rgba(239,83,80,.28); }
+        button.danger:hover { background: var(--danger-dark); }
+        button.small { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
 
         #msg {
-            min-height: 20px;
-            margin: 10px 0 0;
+            min-height: 22px;
+            margin: 12px 0 0;
             font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        #msg.ok { color: #2e8b57; }
-        #msg.err { color: #d33; }
+        #msg.ok { color: var(--success); }
+        #msg.err { color: var(--danger); }
 
         .toolbar {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             align-items: center;
-            margin-bottom: 14px;
+            margin-bottom: 16px;
         }
         .toolbar input {
-            padding: 8px 10px;
-            border: 1px solid #d5d8dd;
-            border-radius: 6px;
-            width: 240px;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            width: 250px;
             outline: none;
+            transition: border-color .15s, box-shadow .15s;
+            background: #fbfcfe;
+        }
+        .toolbar input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+            background: #fff;
         }
         .toolbar .spacer { flex: 1; }
         .api-info {
             font-size: 12px;
-            color: #999;
+            color: var(--text-muted);
+            background: var(--primary-light);
+            padding: 5px 12px;
+            border-radius: 999px;
         }
 
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             text-align: center;
+            overflow: hidden;
+            border-radius: 12px;
         }
         th, td {
-            border: 1px solid #e4e6ea;
-            padding: 10px 8px;
+            padding: 13px 10px;
             font-size: 14px;
+            border-bottom: 1px solid var(--border);
         }
-        th { background: #f0f2f5; font-weight: 600; }
-        tbody tr:hover { background: #fafbfc; }
-        td a { color: #2f6fb0; text-decoration: none; }
+        thead th {
+            background: #f7f8fc;
+            font-weight: 600;
+            color: #5b6172;
+            font-size: 13px;
+            letter-spacing: .5px;
+        }
+        tbody tr { transition: background .14s; }
+        tbody tr:hover { background: #f6f8ff; }
+        tbody tr:last-child td { border-bottom: none; }
+        td a { color: var(--primary); text-decoration: none; font-weight: 500; }
         td a:hover { text-decoration: underline; }
 
         /* ---------- 三态：加载中 / 空数据 / 请求失败 ---------- */
@@ -126,7 +233,7 @@
             justify-content: center;
             gap: 14px;
             padding: 56px 20px;
-            color: #666;
+            color: var(--text-muted);
             text-align: center;
         }
         .state-panel p { margin: 0; font-size: 15px; }
@@ -134,18 +241,18 @@
         .spinner {
             width: 40px;
             height: 40px;
-            border: 4px solid #e3e6ea;
-            border-top-color: #4a90d9;
+            border: 4px solid var(--primary-light);
+            border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin .8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .state-icon { font-size: 40px; line-height: 1; }
-        .state-title { font-size: 16px; font-weight: 600; color: #555; }
+        .state-icon { font-size: 44px; line-height: 1; }
+        .state-title { font-size: 16px; font-weight: 600; color: var(--text); }
         .state-detail {
             font-size: 13px;
-            color: #999;
+            color: var(--text-muted);
             max-width: 560px;
             word-break: break-all;
             line-height: 1.6;
@@ -153,13 +260,23 @@
         .retry-btn { margin-top: 4px; }
 
         [hidden] { display: none !important; }
+
+        @media (max-width: 640px) {
+            header { padding: 0 16px; }
+            .form-row input, #dateInput, #locationInput, #linkInput { width: 100%; }
+            main { padding: 16px 10px 40px; }
+            .card { padding: 18px 16px; }
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1>活动通知管理</h1>
-        <marquee>欢迎参加我们的活动！</marquee>
-        <a href="chat.html" style="display:inline-block;margin-top:10px;color:#fff;font-size:13px;text-decoration:none;background:rgba(255,255,255,.18);padding:6px 14px;border-radius:6px;">💬 进入 AI 对话助手</a>
+        <div class="brand">
+            <span class="dot"></span>
+            <span>活动通知管理</span>
+        </div>
+        <div class="spacer"></div>
+        <a class="cta" href="chat.html">💬 AI 对话助手</a>
     </header>
 
     <main>
