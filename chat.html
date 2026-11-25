@@ -187,30 +187,19 @@
                 chatbox.scrollTop = chatbox.scrollHeight;
             }
 
-            function addBubble(role, text) {
+            // 添加一条消息气泡，返回气泡元素（notice/error 只是换了个 className）
+            function addMsg(cls, text) {
                 var div = document.createElement('div');
-                div.className = 'msg ' + role;
+                div.className = 'msg ' + cls;
                 div.textContent = text;
                 chatbox.appendChild(div);
                 scrollToBottom();
                 return div;
             }
 
-            function addNotice(text) {
-                var div = document.createElement('div');
-                div.className = 'msg notice';
-                div.textContent = text;
-                chatbox.appendChild(div);
-                scrollToBottom();
-            }
-
-            function addError(text) {
-                var div = document.createElement('div');
-                div.className = 'msg error';
-                div.textContent = text;
-                chatbox.appendChild(div);
-                scrollToBottom();
-            }
+            function addBubble(role, text) { return addMsg(role, text); }
+            function addNotice(text) { addMsg('notice', text); }
+            function addError(text) { addMsg('error', text); }
 
             function setStreaming(on) {
                 streaming = on;
@@ -223,6 +212,18 @@
             // 停止生成：中断前端 fetch，服务端会随之中断上游
             function stopGenerate() {
                 if (aborter) aborter.abort();
+            }
+
+            // 收尾当前 assistant 气泡：有内容就写入历史，没内容（空回复）就移除
+            function finalizeBubble() {
+                if (!currentBubble) return;
+                var text = currentBubble.textContent || '';
+                if (text.trim()) {
+                    history.push({ role: 'assistant', content: text });
+                } else {
+                    currentBubble.remove();
+                }
+                currentBubble = null;
             }
 
             async function sendMessage() {
@@ -293,15 +294,8 @@
                             } else if (event === 'notice') {
                                 addNotice(payload.text || '');
                             } else if (event === 'error') {
-                                // 流已开始时出错：保留已生成内容，追加错误提示
-                                if (currentText) {
-                                    // 已生成内容保留在气泡里，另起错误提示
-                                    history.push({ role: 'assistant', content: currentText });
-                                    currentBubble = null;
-                                } else {
-                                    currentBubble.remove();
-                                    currentBubble = null;
-                                }
+                                // 流已开始时出错：已生成内容保留在气泡里，另起错误提示
+                                finalizeBubble();
                                 addError(payload.message || '生成失败');
                                 finished = true;
                             } else if (event === 'done') {
@@ -311,43 +305,21 @@
                     }
 
                     // 收尾：把这次 assistant 回复写入历史
-                    if (currentBubble) {
-                        var finalText = currentBubble.textContent || '';
-                        if (finalText.trim()) {
-                            history.push({ role: 'assistant', content: finalText });
-                        } else {
-                            currentBubble.remove();
-                        }
-                        currentBubble = null;
-                    }
+                    finalizeBubble();
 
                     // 前端也做历史裁剪，防止越滚越大
                     trimHistory();
                 } catch (e) {
                     // 用户主动停止
                     if (e && e.name === 'AbortError') {
-                        var stoppedText = currentText || currentBubble.textContent || '';
-                        if (currentBubble) {
-                            if (stoppedText.trim()) {
-                                history.push({ role: 'assistant', content: stoppedText });
-                            } else {
-                                currentBubble.remove();
-                            }
-                            currentBubble = null;
-                        }
+                        finalizeBubble();
                         addNotice('已停止生成。');
                         trimHistory();
                     } else if (e && e.name === 'TypeError') {
+                        finalizeBubble();
                         addError('无法连接后端服务。请确认已运行 node app.js，并检查 config.js 里的 API_BASE 地址。');
                     } else {
-                        if (currentBubble) {
-                            if (currentBubble.textContent.trim()) {
-                                history.push({ role: 'assistant', content: currentBubble.textContent });
-                            } else {
-                                currentBubble.remove();
-                            }
-                            currentBubble = null;
-                        }
+                        finalizeBubble();
                         addError(e.message || String(e));
                     }
                 } finally {

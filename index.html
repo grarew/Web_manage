@@ -411,45 +411,15 @@
             function showError(message, rawDetail) {
                 els.table.hidden = true;
                 els.listState.hidden = false;
-                els.listState.innerHTML = '';
-
-                var box = document.createElement('div');
-                box.className = 'state-panel';
-                box.style.padding = '0';
-
-                var icon = document.createElement('div');
-                icon.className = 'state-icon';
-                icon.textContent = '⚠️';
-
-                var title = document.createElement('p');
-                title.className = 'state-title';
-                title.textContent = '请求失败';
-
-                var detail = document.createElement('p');
-                detail.className = 'state-detail';
-                detail.textContent = message || '未知错误';
-
-                box.appendChild(icon);
-                box.appendChild(title);
-                box.appendChild(detail);
-
-                if (rawDetail) {
-                    var raw = document.createElement('p');
-                    raw.className = 'state-detail';
-                    raw.style.fontSize = '12px';
-                    raw.style.color = '#bbb';
-                    raw.textContent = '原始错误：' + rawDetail;
-                    box.appendChild(raw);
-                }
-
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'retry-btn';
-                btn.textContent = '重试';
-                btn.onclick = loadActivities;
-
-                box.appendChild(btn);
-                els.listState.appendChild(box);
+                // 用 innerHTML 一次性拼出错误面板，比逐个 createElement 更短
+                els.listState.innerHTML =
+                    '<div class="state-panel" style="padding:0">' +
+                    '<div class="state-icon">⚠️</div>' +
+                    '<p class="state-title">请求失败</p>' +
+                    '<p class="state-detail">' + escapeHtml(message || '未知错误') + '</p>' +
+                    (rawDetail ? '<p class="state-detail" style="font-size:12px;color:#bbb">原始错误：' + escapeHtml(rawDetail) + '</p>' : '') +
+                    '<button type="button" class="retry-btn" onclick="loadActivities()">重试</button>' +
+                    '</div>';
             }
 
             // 把浏览器的英文网络错误翻译成能看懂的中文提示
@@ -624,6 +594,7 @@
             window.startEdit = enterEditMode;
             window.deleteActivity = deleteActivity;
             window.filterTable = filterTable;
+            window.loadActivities = loadActivities;
 
             // ---------- 事件绑定 ----------
             els.form.addEventListener('submit', handleSubmit);

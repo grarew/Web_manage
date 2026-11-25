@@ -1,38 +1,21 @@
 /**
- * ============================================================
- *  活动通知管理 —— 后端服务（整个网站的大脑）
- * ============================================================
+ * 活动通知管理 —— 后端服务（整个网站的大脑）
  *
- * 这个文件负责两件事：
- *   1. 提供「活动」的增删改查接口（网页 index.html 调它）
- *   2. 提供「AI 对话」接口（网页 chat.html 调它，转发给 DeepSeek）
+ * 负责两件事：
+ *   1. 提供「活动」的增删改查接口（index.html 调用）
+ *   2. 提供「AI 对话」接口（chat.html 调用，转发给 DeepSeek）
  *
- * 它用 Node.js + Express 编写，数据存在 data.json 文件里，
- * 所以服务重启后数据不会丢。
+ * 数据存在 data.json 里，重启不丢。
  *
- * ──────────────────────────────────────────────
- *  本文件的结构（从上到下，按这个顺序读就行）
- * ──────────────────────────────────────────────
- *  第 1 部分：加载 .env 里的环境变量（API Key 只放 .env，不进代码）
- *  第 2 部分：AI 相关的配置、系统提示词、工具定义
- *  第 3 部分：读写 data.json 的辅助函数
- *  第 4 部分：接口
- *       - /api/chat          AI 对话（流式输出）
- *       - /api/activities    活动增删改查
- *  第 5 部分：托管前端页面 + 错误处理 + 启动服务
+ * 本文件结构（从上到下按顺序读）：
+ *   1. 加载 .env 环境变量（API Key 只放 .env）
+ *   2. AI 配置、系统提示词、工具定义
+ *   3. 读写 data.json 的辅助函数
+ *   4. 接口：/api/chat（AI 对话）+ /api/activities（增删改查）
+ *   5. 托管前端页面 + 错误处理 + 启动服务
  *
- * ──────────────────────────────────────────────
- *  活动接口一览
- * ──────────────────────────────────────────────
- *   GET    /api/activities        获取活动列表
- *   POST   /api/activities        新增活动
- *   PUT    /api/activities/:id    修改活动
- *   DELETE /api/activities/:id    删除活动
- *
- *  统一返回格式：{ code, data, msg }
- *     code = 0            成功
- *     code = 400/404/500  失败（和 HTTP 状态码一致）
- * ============================================================
+ * 接口：GET/POST /api/activities、PUT/DELETE /api/activities/:id、POST /api/chat
+ * 统一返回 { code, data, msg }，code=0 成功，400/404/500 失败
  */
 
 const express = require('express');
@@ -40,8 +23,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
-// ---------- 环境变量加载（.env 文件，API Key 只放这里，绝不进代码） ----------
-// 优先读项目根目录的 .env，把 DEEPSEEK_API_KEY 等注入 process.env
+// 加载 .env（API Key 只放这里，绝不进代码）
 (function loadEnv() {
   try {
     const envPath = path.join(__dirname, '.env');
@@ -67,18 +49,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-// ---------- 大模型对话配置（全部来自环境变量，代码里不含任何 Key） ----------
+// AI 对话配置（全部来自环境变量，代码里不含任何 Key）
 const CHAT = {
-  // DeepSeek 开放平台接口地址
-  baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-  apiKey: process.env.DEEPSEEK_API_KEY || '',
-  model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-  // 上下文窗口上限（字符数），超长时从最早的历史消息开始丢弃
-  maxContextChars: Number(process.env.CHAT_MAX_CONTEXT_CHARS) || 12000,
-  // 历史消息条数上限（额外保险）
-  maxHistoryTurns: Number(process.env.CHAT_MAX_HISTORY_TURNS) || 20,
-  // 请求超时（毫秒）
-  timeoutMs: Number(process.env.CHAT_TIMEOUT_MS) || 60000
+  baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com', // 接口地址
+  apiKey: process.env.DEEPSEEK_API_KEY || '',                          // API Key（放 .env）
+  model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',                // 模型
+  maxContextChars: Number(process.env.CHAT_MAX_CONTEXT_CHARS) || 12000, // 上下文上限（字符）
+  maxHistoryTurns: Number(process.env.CHAT_MAX_HISTORY_TURNS) || 20,    // 历史条数上限
+  timeoutMs: Number(process.env.CHAT_TIMEOUT_MS) || 60000               // 超时（毫秒）
 };
 
 // ---------- 系统提示词：把角色和边界说清楚 ----------
@@ -99,8 +77,7 @@ const SYSTEM_PROMPT =
   '- 不提供医疗、法律、投资等专业建议；\n' +
   '- 不编造不确定的信息，不确定时如实说明。';
 
-// ---------- 工具定义（Function Calling）：让 AI 能真正增删改活动 ----------
-// 每个工具对应一个已有的活动接口操作，AI 决定调用后由后端真实执行
+// 工具定义（Function Calling）：告诉 AI 它能调哪些工具，AI 决定后由后端真实执行
 const TOOLS = [
   {
     type: 'function',
@@ -151,14 +128,18 @@ const TOOLS = [
   }
 ];
 
-// ---------- 工具执行器：AI 决定调用后，这里真正操作 data.json ----------
-// 复用现有的 validateActivity 校验逻辑，保证和手动操作行为一致
+// 按 id 找到活动在数组里的下标；找不到返回 -1，id 非法返回 -2
+function findActivityIndex(data, rawId) {
+  const id = Number(rawId);
+  if (!Number.isInteger(id) || id <= 0) return -2;
+  return data.findIndex((a) => a.id === id);
+}
+
 function executeTool(name, args) {
+  // 新增活动
   if (name === 'add_activity') {
     const errors = validateActivity(args);
-    if (errors.length > 0) {
-      return { ok: false, message: errors.join('；') };
-    }
+    if (errors.length > 0) return { ok: false, message: errors.join('；') };
     const data = readData();
     const nextId = data.length ? Math.max(...data.map((a) => a.id)) + 1 : 1;
     const item = {
@@ -173,44 +154,34 @@ function executeTool(name, args) {
     return { ok: true, message: '已新增活动「' + item.name + '」（ID ' + item.id + '）', data: item };
   }
 
+  // 修改活动
   if (name === 'update_activity') {
-    const id = Number(args.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return { ok: false, message: 'id 必须是正整数' };
-    }
     const errors = validateActivity(args);
-    if (errors.length > 0) {
-      return { ok: false, message: errors.join('；') };
-    }
+    if (errors.length > 0) return { ok: false, message: errors.join('；') };
     const data = readData();
-    const idx = data.findIndex((a) => a.id === id);
-    if (idx === -1) {
-      return { ok: false, message: '活动不存在（ID ' + id + '）' };
-    }
+    const idx = findActivityIndex(data, args.id);
+    if (idx === -2) return { ok: false, message: 'id 必须是正整数' };
+    if (idx === -1) return { ok: false, message: '活动不存在（ID ' + args.id + '）' };
     data[idx] = {
-      id: id,
+      id: data[idx].id,
       name: args.name.trim(),
       date: args.date.trim(),
       location: args.location.trim(),
       link: data[idx].link || ''
     };
     writeData(data);
-    return { ok: true, message: '已修改活动 ID ' + id + ' 为「' + args.name.trim() + '」', data: data[idx] };
+    return { ok: true, message: '已修改活动 ID ' + data[idx].id + ' 为「' + args.name.trim() + '」', data: data[idx] };
   }
 
+  // 删除活动
   if (name === 'delete_activity') {
-    const id = Number(args.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return { ok: false, message: 'id 必须是正整数' };
-    }
     const data = readData();
-    const idx = data.findIndex((a) => a.id === id);
-    if (idx === -1) {
-      return { ok: false, message: '活动不存在（ID ' + id + '）' };
-    }
+    const idx = findActivityIndex(data, args.id);
+    if (idx === -2) return { ok: false, message: 'id 必须是正整数' };
+    if (idx === -1) return { ok: false, message: '活动不存在（ID ' + args.id + '）' };
     const removed = data.splice(idx, 1)[0];
     writeData(data);
-    return { ok: true, message: '已删除活动「' + removed.name + '」（ID ' + id + '）', data: removed };
+    return { ok: true, message: '已删除活动「' + removed.name + '」（ID ' + removed.id + '）', data: removed };
   }
 
   return { ok: false, message: '未知工具：' + name };
@@ -222,12 +193,7 @@ const SEED = [
   { id: 2, name: '夏季音乐节', date: '2027年6月15日', location: '学校操场' }
 ];
 
-// ---------- 跨域：在服务端加响应头，允许网页（如 GitHub Pages）跨域访问 ----------
-// cors 中间件实际会加上这些响应头：
-//   Access-Control-Allow-Origin: *
-//   Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS
-//   Access-Control-Allow-Headers: Content-Type
-// 并自动处理浏览器的 OPTIONS 预检请求（否则 DELETE、JSON 请求会被浏览器拦下）。
+// 跨域：允许别的网页调用我们的接口（自动加响应头 + 处理预检请求）
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -394,29 +360,21 @@ app.post('/api/chat', async (req, res) => {
     if (!res.writableEnded) controller.abort();
   });
 
-  // 把 DeepSeek 的 HTTP 错误映射成可读中文提示
+  // 把 DeepSeek 的 HTTP 错误码翻译成能看懂的中文
   function mapUpstreamError(status, detail) {
-    if (status === 401) {
-      return 'API Key 无效或已失效，请检查 .env 里的 DEEPSEEK_API_KEY 是否正确（401 未授权）';
-    }
-    if (status === 402) {
-      return '账户余额不足，请前往 DeepSeek 开放平台充值（402 余额不足）';
-    }
-    if (status === 429) {
-      return '请求过于频繁，触发了限流，请稍后再试（429 限流）';
-    }
-    if (status >= 500) {
-      return '大模型服务暂时不可用，请稍后重试（' + status + '）';
-    }
+    if (status === 401) return 'API Key 无效或已失效，请检查 .env 里的 DEEPSEEK_API_KEY 是否正确（401 未授权）';
+    if (status === 402) return '账户余额不足，请前往 DeepSeek 开放平台充值（402 余额不足）';
+    if (status === 429) return '请求过于频繁，触发了限流，请稍后再试（429 限流）';
+    if (status >= 500) return '大模型服务暂时不可用，请稍后重试（' + status + '）';
     return '大模型请求失败（HTTP ' + status + '）' + (detail ? '：' + detail : '');
   }
 
-  // 非流式调用 DeepSeek，返回解析后的完整 JSON（用于工具决策阶段）
-  async function callNonStream(reqMessages, withTools) {
+  // 调用 DeepSeek 的公共部分（发请求 + 错误处理），stream 决定是否流式
+  async function callDeepSeek(reqMessages, stream, withTools) {
     const bodyObj = {
       model: CHAT.model,
       messages: reqMessages,
-      stream: false,
+      stream: stream,
       temperature: 0.7
     };
     if (withTools) bodyObj.tools = TOOLS;
@@ -434,31 +392,18 @@ app.post('/api/chat', async (req, res) => {
       try { const eb = await r.json(); detail = (eb && eb.error && eb.error.message) || JSON.stringify(eb); } catch (e) {}
       throw new Error(mapUpstreamError(r.status, detail));
     }
+    return r;
+  }
+
+  // 非流式调用，返回解析好的完整 JSON（用于判断 AI 是否要调工具）
+  async function callNonStream(reqMessages, withTools) {
+    const r = await callDeepSeek(reqMessages, false, withTools);
     return await r.json();
   }
 
-  // 流式调用 DeepSeek，把增量文本通过 send('delta') 推给前端
+  // 流式调用，把 AI 一个字一个字通过 send('delta') 推给前端
   async function callStream(reqMessages) {
-    const r = await fetch(CHAT.baseUrl + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + CHAT.apiKey
-      },
-      body: JSON.stringify({
-        model: CHAT.model,
-        messages: reqMessages,
-        stream: true,
-        temperature: 0.7
-      }),
-      signal: controller.signal
-    });
-    if (!r.ok) {
-      let detail = '';
-      try { const eb = await r.json(); detail = (eb && eb.error && eb.error.message) || JSON.stringify(eb); } catch (e) {}
-      throw new Error(mapUpstreamError(r.status, detail));
-    }
-
+    const r = await callDeepSeek(reqMessages, true, false);
     const reader = r.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
