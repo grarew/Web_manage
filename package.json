@@ -24,8 +24,5 @@
   "bugs": {
     "url": "https://github.com/grarew/Web_manage/issues"
   },
-  "homepage": "https://github.com/grarew/Web_manage#readme",
-  "devDependencies": {
-    "puppeteer-core": "^25.17.0"
-  }
+  "homepage": "https://github.com/grarew/Web_manage#readme"
 }

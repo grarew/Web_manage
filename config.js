@@ -1,20 +1,19 @@
 /**
- * 前端配置项（唯一需要改的地方）
+ * 前端配置（通常不用改）
  *
- * 规则：
- *  - 页面和接口在【同一个服务】上（本地 `node app.js`、Render 单服务部署）
- *      → API_BASE 留空字符串 ''，fetch 会走相对路径 /api/activities，天然不跨域
- *  - 前端【独立部署】（如 GitHub Pages）而后端在别处
- *      → 把下面的 PAGES_API_BASE 改成后端线上地址
+ * 说明：
+ *  网页和接口都跑在【同一个服务】上（本地 `node app.js`、Railway 部署），
+ *  所以 API_BASE 留空 '' 即可，网页会自动用相对路径访问接口，不会跨域。
  *
- * 注意：这里只放地址，不要写业务逻辑。
+ *  只有当网页和接口【分开部署】时（比如网页放 GitHub Pages、接口在别处），
+ *  才需要把下面的 PAGES_API_BASE 改成接口的真实地址。
  */
 (function () {
   var host = location.hostname;
 
-  // 当页面部署在 GitHub Pages（xxx.github.io）时使用的后端地址。
-  // 部署 Render 后，把它改成 Render 实际分配的域名。
-  var PAGES_API_BASE = 'https://web-manage-api.onrender.com';
+  // 网页部署在 GitHub Pages（xxx.github.io）时使用的后端地址。
+  // 正常本地运行 / Railway 部署都不会走到这个分支，不用管它。
+  var PAGES_API_BASE = '';
 
   var isGithubPages = /\.github\.io$/i.test(host);
 
