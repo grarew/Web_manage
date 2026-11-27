@@ -4,288 +4,207 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>活动通知管理</title>
+
 <style>
-/* ===== 样式：配色 + 布局，都写在这里 ===== */
-:root{
-  --main:#5b6ef5; --main2:#8b5cf6; --bg:#f4f6fc; --card:#fff;
-  --text:#1f2430; --muted:#8a91a3; --line:#e8ebf5;
-  --ok:#1aa97b; --danger:#ef5350; --radius:16px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+/* 颜色配置：改这一行就换整套配色（主色=顶栏/按钮，红=删除） */
+:root { --主色:#5b6ef5; --背景:#f4f6fc; --白:#fff; --字:#1f2430; --灰:#8a91a3; --线:#e8ebf5; --红:#ef5350; }
 
-/* 顶部导航 */
-header{background:linear-gradient(120deg,var(--main),var(--main2));color:#fff;
-  padding:0 22px;height:62px;display:flex;align-items:center;gap:12px;
-  box-shadow:0 2px 14px rgba(91,110,245,.3);position:sticky;top:0;z-index:10}
-header .logo{font-size:18px;font-weight:600}
-header .spacer{flex:1}
-header a{color:#fff;text-decoration:none;font-size:14px;background:rgba(255,255,255,.18);
-  padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.28);transition:.2s}
-header a:hover{background:rgba(255,255,255,.3);transform:translateY(-1px)}
+/* ===== 样式 ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", sans-serif; background: var(--背景); color: var(--字); }
 
-/* 主体 + 卡片 */
-main{max-width:960px;margin:0 auto;padding:24px 16px 48px}
-.card{background:var(--card);border-radius:var(--radius);padding:22px;margin-bottom:20px;
-  box-shadow:0 4px 20px rgba(30,45,90,.06)}
-.card h2{font-size:16px;margin-bottom:16px;padding-left:11px;border-left:4px solid var(--main)}
+header { background: var(--主色); color: #fff; height: 56px;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+header a { color: #fff; font-size: 14px; text-decoration: none; }
 
-/* 输入框 + 按钮 */
-input{padding:11px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px;
-  outline:none;background:#fafbff;transition:.15s}
-input:focus{border-color:var(--main);box-shadow:0 0 0 3px rgba(91,110,245,.15);background:#fff}
-input::placeholder{color:#b3bac9}
-.row{display:flex;flex-wrap:wrap;gap:10px}
-.row input{flex:1;min-width:140px}
-button{padding:10px 18px;border:0;border-radius:10px;background:var(--main);color:#fff;
-  font-size:14px;cursor:pointer;transition:.15s;white-space:nowrap}
-button:hover{filter:brightness(1.08);transform:translateY(-1px)}
-button:disabled{opacity:.5;cursor:not-allowed}
-button.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
-button.danger{background:var(--danger)}
-button.small{padding:6px 12px;font-size:13px;border-radius:8px}
-#msg{min-height:20px;margin-top:10px;font-size:14px}
-#msg.ok{color:var(--ok)} #msg.err{color:var(--danger)}
+/* 白盒子 */
+.box { background: var(--白); max-width: 820px; margin: 18px auto; padding: 16px;
+  border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+h2 { font-size: 15px; margin-bottom: 12px; padding-left: 8px; border-left: 3px solid var(--主色); }
 
-/* 工具栏 */
-.bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
-.bar input{flex:1}
-.bar .spacer{flex:1}
-.api-info{font-size:12px;color:var(--main);background:rgba(91,110,245,.1);padding:6px 12px;border-radius:999px}
+input { padding: 9px 12px; border: 1px solid var(--线); border-radius: 8px;
+  font-size: 14px; outline: none; }
+input:focus { border-color: var(--主色); }
+button { padding: 9px 14px; border: none; border-radius: 8px; font-size: 14px;
+  background: var(--主色); color: #fff; cursor: pointer; }
+.灰 { background: var(--线); color: var(--字); }
+.红 { background: var(--红); }
 
-/* 活动列表（卡片式） */
-.item{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--line);
-  border-radius:12px;margin-bottom:12px;transition:.15s}
-.item:hover{border-color:var(--main);box-shadow:0 6px 18px rgba(91,110,245,.1);transform:translateY(-2px)}
-.item .info{flex:1;min-width:0}
-.item .name{font-size:15px;font-weight:600;margin-bottom:6px}
-.item .name a{color:var(--main);text-decoration:none}
-.item .name a:hover{text-decoration:underline}
-.item .meta{font-size:13px;color:var(--muted)}
-.item .meta span{margin-right:16px}
-.item .ops{display:flex;gap:8px}
+/* 一行排开，输入框自动伸缩 */
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.row input { flex: 1; min-width: 120px; }
 
-/* 加载中 / 空 / 失败 三种状态的面板 */
-.state{text-align:center;padding:48px 20px;color:var(--muted)}
-.state .icon{font-size:44px;margin-bottom:10px}
-.state .title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px}
-.state .detail{font-size:13px;line-height:1.6;word-break:break-all}
-.spinner{width:38px;height:38px;margin:0 auto 14px;border:4px solid rgba(91,110,245,.15);
-  border-top-color:var(--main);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-[hidden]{display:none!important}
+/* 每条活动 */
+.item { display: flex; align-items: center; gap: 10px; padding: 12px;
+  border-bottom: 1px solid var(--线); }
+.item b { font-size: 15px; }
+.item span { font-size: 13px; color: var(--灰); }
+.grow { flex: 1; }
+.item a { color: var(--主色); }
 
-@media(max-width:600px){
-  header{padding:0 16px}
-  main{padding:16px 10px 40px}
-  .item{flex-direction:column;align-items:stretch}
-  .item .ops{justify-content:flex-end}
-}
+#提示 { font-size: 14px; height: 20px; }
+.tip { text-align: center; color: var(--灰); padding: 30px 0; font-size: 14px; }
 </style>
 </head>
+
 <body>
+
 <header>
-  <div class="logo">📋 活动通知管理</div>
-  <div class="spacer"></div>
-  <a href="chat.html">💬 AI 对话助手</a>
+  <b>📋 活动通知管理</b>
+  <a href="chat.html">💬 AI 助手</a>
 </header>
 
-<main>
-  <!-- 新增 / 编辑表单 -->
-  <section class="card">
-    <h2 id="formTitle">新增活动</h2>
-    <form id="form">
-      <div class="row">
-        <input id="name" placeholder="活动名称（必填）">
-        <input id="date" placeholder="日期，如 2027年5月1日（必填）">
-        <input id="location" placeholder="地点（必填）">
-        <input id="link" placeholder="详情页链接（可选）">
-        <button id="submit">新增</button>
-        <button type="button" class="ghost" id="cancel" hidden>取消修改</button>
-      </div>
-      <p id="msg"></p>
-    </form>
-  </section>
-
-  <!-- 活动列表 -->
-  <section class="card">
-    <div class="bar">
-      <input id="search" placeholder="🔍 搜索活动名称...">
-      <div class="spacer"></div>
-      <button type="button" class="ghost small" id="refresh">刷新列表</button>
-      <span class="api-info" id="apiInfo"></span>
+<!-- 新增 / 修改 -->
+<div class="box">
+  <h2 id="标题">新增活动</h2>
+  <form id="表单">
+    <div class="row">
+      <input id="名称" placeholder="活动名称">
+      <input id="日期" placeholder="日期，如 2027年5月1日">
+      <input id="地点" placeholder="地点">
+      <input id="链接" placeholder="详情页链接（可选）">
     </div>
-    <!-- 加载中 / 空 / 失败 / 正常，四种状态共用一个容器 -->
-    <div id="list"></div>
-  </section>
-</main>
+    <div class="row">
+      <button>保存</button>
+      <button type="button" class="灰" id="取消" hidden>取消</button>
+    </div>
+    <p id="提示"></p>
+  </form>
+</div>
+
+<!-- 搜索 + 列表 -->
+<div class="box">
+  <div class="row">
+    <input id="搜索" placeholder="🔍 搜索活动名称">
+    <button type="button" class="灰" id="刷新">刷新</button>
+  </div>
+  <div id="列表"></div>
+</div>
 
 <script src="config.js"></script>
 <script>
-/* ===== 逻辑：增删改查活动，全部走后端接口 ===== */
-// 小工具：按 id 取元素、转义文字（防止活动名里的特殊字符破坏页面）
-const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* ===== 全部代码就这些，从上往下读 ===== */
 
-// 后端地址（来自 config.js）
-const API = String((window.APP_CONFIG || {}).API_BASE || '').replace(/\/+$/, '');
-let activities = [];   // 当前活动列表
-let editingId = null;  // 正在编辑的活动 id，null 表示新增模式
+var 地址 = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || "";  // 后端地址
+var 列表 = [];     // 所有活动
+var 改id = null;   // 正在改哪一条；null 表示新增
 
-/* 统一发请求：自动检查后端的 {code, data, msg} */
-async function request(path, options = {}) {
-  const res = await fetch(API + path, options);
-  let body;
-  try { body = await res.json(); }
-  catch (e) { throw new Error('服务器返回的不是 JSON（HTTP ' + res.status + '）'); }
-  if (body.code !== 0) throw new Error(body.msg || '请求失败');
-  return body.data;
+function 取(id) { return document.getElementById(id); }
+
+// 把 < > 转义，防止活动名弄坏页面
+function 防(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/* 显示列表：有数据显示卡片，没数据显示空状态 */
-function render() {
-  if (!activities.length) {
-    $('list').innerHTML = stateBox('📭', '暂无活动数据', '在上方表单新增一条活动吧。');
+// 发请求，只返回 data
+async function 请求(路径, 选项) {
+  var 回应 = await fetch(地址 + 路径, 选项);
+  var 结果 = await 回应.json();
+  if (结果.code !== 0) throw new Error(结果.msg);
+  return 结果.data;
+}
+
+// ---------- 画列表 ----------
+function 画() {
+  var 词 = 取("搜索").value;
+  var 网页 = "";
+  for (var i = 0; i < 列表.length; i++) {
+    var a = 列表[i];
+    if (词 && a.name.indexOf(词) < 0) continue;   // 不符合搜索就跳过
+    var 名 = a.link ? '<a href="' + 防(a.link) + '" target="_blank">' + 防(a.name) + "</a>"
+                    : 防(a.name);
+    网页 += '<div class="item"><div class="grow"><b>' + 名 + "</b><br>" +
+            "<span>📅 " + 防(a.date) + "　📍 " + 防(a.location) + "</span></div>" +
+            '<button class="灰" onclick="编辑(' + a.id + ')">改</button>' +
+            '<button class="红" onclick="删除(' + a.id + ')">删</button></div>';
+  }
+  取("列表").innerHTML = 网页 || '<div class="tip">还没有活动</div>';
+}
+
+// ---------- 加载列表 ----------
+async function 加载() {
+  取("列表").innerHTML = '<div class="tip">加载中…</div>';
+  try {
+    列表 = await 请求("/api/activities");
+    画();
+  } catch (错误) {
+    取("列表").innerHTML = '<div class="tip">连不上后端：' + 防(错误.message) + "</div>";
+  }
+}
+
+// ---------- 清空表单 ----------
+function 清空() {
+  var 框 = ["名称", "日期", "地点", "链接"];
+  for (var i = 0; i < 框.length; i++) 取(框[i]).value = "";
+  改id = null;
+  取("标题").textContent = "新增活动";
+  取("取消").hidden = true;
+}
+
+// ---------- 点"改"：把这条填进表单 ----------
+function 编辑(id) {
+  for (var i = 0; i < 列表.length; i++) {
+    if (列表[i].id !== id) continue;
+    var a = 列表[i];
+    改id = id;
+    取("名称").value = a.name;
+    取("日期").value = a.date;
+    取("地点").value = a.location;
+    取("链接").value = a.link || "";
+    取("标题").textContent = "修改活动（ID " + id + "）";
+    取("取消").hidden = false;
+  }
+}
+
+// ---------- 点"删" ----------
+async function 删除(id) {
+  if (!confirm("确定删除？")) return;
+  try {
+    await 请求("/api/activities/" + id, { method: "DELETE" });
+    加载();
+  } catch (错误) {
+    取("提示").textContent = 错误.message;
+  }
+}
+
+// ---------- 点"保存"（新增或修改） ----------
+取("表单").onsubmit = async function (事件) {
+  事件.preventDefault();   // 别让页面刷新
+
+  var 数据 = {
+    name: 取("名称").value,
+    date: 取("日期").value,
+    location: 取("地点").value,
+    link: 取("链接").value
+  };
+  if (!数据.name || !数据.date || !数据.location) {
+    取("提示").textContent = "名称、日期、地点都要填";
     return;
   }
-  $('list').innerHTML = activities.map(a => {
-    const name = a.link
-      ? '<a href="' + esc(a.link) + '" target="_blank">' + esc(a.name) + '</a>'
-      : esc(a.name);
-    return '<div class="item" data-name="' + esc(a.name) + '">' +
-      '<div class="info">' +
-        '<div class="name">' + name + '</div>' +
-        '<div class="meta"><span>📅 ' + esc(a.date) + '</span><span>📍 ' + esc(a.location) + '</span></div>' +
-      '</div>' +
-      '<div class="ops">' +
-        '<button class="small" onclick="edit(' + a.id + ')">编辑</button>' +
-        '<button class="small danger" onclick="remove(' + a.id + ')">删除</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-  filter(); // 渲染后应用当前的搜索词
-}
 
-/* 三种状态面板：加载中 / 空 / 失败 */
-function stateBox(icon, title, detail) {
-  return '<div class="state"><div class="icon">' + icon + '</div>' +
-    '<div class="title">' + esc(title) + '</div><div class="detail">' + esc(detail) + '</div></div>';
-}
-function showLoading() {
-  $('list').innerHTML = '<div class="state"><div class="spinner"></div><div class="detail">正在加载活动列表…</div></div>';
-}
-function showError(e) {
-  let msg = e.message || String(e);
-  // 把浏览器的英文网络错误翻译成人话
-  if (e instanceof TypeError || /Failed to fetch|NetworkError/i.test(msg)) {
-    msg = '无法连接后端。请确认已运行 node app.js，并检查 config.js 里的地址。';
+  var 选项 = { method: "POST", headers: { "Content-Type": "application/json" },
+               body: JSON.stringify(数据) };
+  var 路径 = "/api/activities";
+  if (改id !== null) {        // 有 id 就是修改
+    选项.method = "PUT";
+    路径 = 路径 + "/" + 改id;
   }
-  $('list').innerHTML = stateBox('⚠️', '请求失败', msg) +
-    '<div class="state" style="padding-top:0"><button class="small" onclick="load()">重试</button></div>';
-}
 
-/* 加载列表 */
-async function load() {
-  showLoading();
   try {
-    activities = await request('/api/activities');
-    render();
-    say('');
-  } catch (e) { showError(e); }
-}
-
-/* 搜索：按名称过滤卡片 */
-function filter() {
-  const kw = $('search').value.trim().toLowerCase();
-  document.querySelectorAll('.item').forEach(el => {
-    el.hidden = !el.dataset.name.toLowerCase().includes(kw);
-  });
-}
-
-/* 表单提示文字 */
-function say(text, type) {
-  $('msg').textContent = text || '';
-  $('msg').className = type || '';
-}
-
-/* 清空表单，回到"新增"模式 */
-function resetForm() {
-  ['name', 'date', 'location', 'link'].forEach(id => $(id).value = '');
-  editingId = null;
-  $('formTitle').textContent = '新增活动';
-  $('submit').textContent = '新增';
-  $('cancel').hidden = true;
-}
-
-/* 点"编辑"：把这条活动填进表单，切换到"修改"模式 */
-function edit(id) {
-  const a = activities.find(x => x.id === id);
-  if (!a) return;
-  editingId = id;
-  $('name').value = a.name;
-  $('date').value = a.date;
-  $('location').value = a.location;
-  $('link').value = a.link || '';
-  $('formTitle').textContent = '编辑活动（ID ' + id + '）';
-  $('submit').textContent = '保存修改';
-  $('cancel').hidden = false;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-/* 点"删除"：先确认，再删，成功后刷新 */
-async function remove(id) {
-  if (!confirm('确定删除这条活动吗？')) return;
-  try {
-    await request('/api/activities/' + id, { method: 'DELETE' });
-    if (editingId === id) resetForm();
-    say('删除成功', 'ok');
-    load();
-  } catch (e) { say(e.message, 'err'); }
-}
-
-/* 提交表单：新增 或 修改 */
-$('form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const name = $('name').value.trim(), date = $('date').value.trim(),
-        location = $('location').value.trim(), link = $('link').value.trim();
-  if (!name || !date || !location) {
-    say('请填写完整：名称、日期、地点都不能为空', 'err');
-    return;
+    await 请求(路径, 选项);
+    取("提示").textContent = "保存成功";
+    清空();
+    加载();
+  } catch (错误) {
+    取("提示").textContent = 错误.message;
   }
-  const data = { name, date, location };
-  if (link) data.link = link;
-  $('submit').disabled = true;
-  try {
-    if (editingId === null) {
-      await request('/api/activities', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      say('新增成功', 'ok');
-    } else {
-      await request('/api/activities/' + editingId, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      say('修改成功', 'ok');
-    }
-    resetForm();
-    load(); // 增删改后自动刷新列表
-  } catch (err) { say(err.message, 'err'); }
-  finally { $('submit').disabled = false; }
-});
+};
 
-/* 事件绑定 */
-$('cancel').addEventListener('click', resetForm);
-$('refresh').addEventListener('click', load);
-$('search').addEventListener('input', filter);
-$('apiInfo').textContent = '后端：' + (API || '同源（当前站点）');
-
-/* 暴露给内联 onclick 调用 */
-window.edit = edit;
-window.remove = remove;
-window.load = load;
-
-/* 启动 */
-load();
+// ---------- 启动 ----------
+取("取消").onclick = 清空;
+取("刷新").onclick = 加载;
+取("搜索").oninput = 画;   // 边打字边过滤
+加载();
 </script>
 </body>
 </html>
